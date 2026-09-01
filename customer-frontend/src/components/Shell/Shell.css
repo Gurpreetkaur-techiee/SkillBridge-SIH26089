@@ -1,0 +1,108 @@
+.app-shell{
+min-height:100vh;
+padding-bottom:24px
+}.topbar{
+height:72px;
+display:flex;
+align-items:center;
+justify-content:space-between;
+padding:0 max(20px,calc((100% - 1240px)/2));
+border-bottom:1px solid color-mix(in srgb,var(--border),transparent 25%);
+background:color-mix(in srgb,var(--surface),transparent 5%);
+backdrop-filter:blur(18px);
+position:sticky;
+top:0;
+z-index:5
+}.brand{
+font-weight:800;
+font-size:1.55rem;
+letter-spacing:-.09em;
+color:var(--text)
+}.brand span{
+color:var(--brand)
+}.header-tools{
+display:flex;
+gap:9px;
+align-items:center
+}.customer-layout{
+display:block
+}.side-nav{
+position:fixed;
+left:20px;
+top:50%;
+transform:translateY(-50%);
+width:205px;
+padding:13px 10px;
+border:1px solid var(--border);
+background:var(--surface);
+box-shadow:0 12px 30px #1c376116;
+border-radius:var(--radius);
+z-index:4
+}.side-nav p{
+font-size:.7rem;
+color:var(--muted);
+font-weight:800;
+text-transform:uppercase;
+letter-spacing:.08em;
+margin:5px 8px 11px
+}.side-nav a{
+display:flex;
+align-items:center;
+gap:10px;
+padding:11px 10px;
+border-radius:9px;
+font-size:.88rem;
+font-weight:650;
+color:var(--muted)
+}.side-nav a.active,.side-nav a:hover{
+background:var(--brand-soft);
+color:var(--brand)
+}.page-wrap{
+min-width:0;
+max-width:1180px;
+margin:0 auto 0 252px;
+padding:36px 24px 44px
+}.bottom-nav{
+display:none
+}@media(max-width:680px){
+.app-shell{
+padding-bottom:76px
+}.side-nav{
+display:none
+}.page-wrap{
+margin:0;
+padding:24px 16px
+}.bottom-nav{
+position:fixed;
+bottom:0;
+left:0;
+right:0;
+height:70px;
+background:color-mix(in srgb,var(--surface),transparent 4%);
+backdrop-filter:blur(18px);
+border-top:1px solid var(--border);
+display:flex;
+justify-content:space-around;
+z-index:6
+}.bottom-nav a{
+display:grid;
+place-content:center;
+justify-items:center;
+gap:4px;
+font-size:.64rem;
+color:var(--muted);
+min-width:58px
+}.bottom-nav a.active{
+color:var(--brand)
+}
+}@media(min-width:681px) and (max-width:900px){
+.side-nav{
+left:12px;
+width:170px
+}.side-nav span{
+font-size:.8rem
+}.page-wrap{
+margin-left:194px;
+padding-inline:18px
+}
+}

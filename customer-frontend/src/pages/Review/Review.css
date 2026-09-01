@@ -1,0 +1,20 @@
+.review-card{
+max-width:620px;
+border:1px solid var(--border);
+border-radius:var(--radius);
+background:var(--surface);
+padding:25px
+}.review-card>p{
+color:var(--muted);
+margin-top:0
+}.review-card label{
+display:block;
+font-size:.88rem;
+font-weight:650;
+margin:18px 0
+}.review-card small{
+display:block;
+color:var(--muted);
+text-align:center;
+margin-top:12px
+}

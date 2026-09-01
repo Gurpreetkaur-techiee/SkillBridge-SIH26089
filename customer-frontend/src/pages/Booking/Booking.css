@@ -1,0 +1,25 @@
+.booking-form{
+max-width:720px;
+border:1px solid var(--border);
+background:var(--surface);
+border-radius:20px;
+padding:28px;
+box-shadow:0 8px 22px #1c37610a
+}.booking-form label{
+display:block;
+font-size:.88rem;
+font-weight:700;
+margin-bottom:16px
+}.booking-form .primary{
+margin-top:8px
+}.two-col{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:15px
+}@media(max-width:500px){
+.two-col{
+grid-template-columns:1fr
+}.booking-form{
+padding:20px
+}
+}

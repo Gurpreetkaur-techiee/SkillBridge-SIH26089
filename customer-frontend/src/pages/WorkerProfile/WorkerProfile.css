@@ -1,0 +1,20 @@
+.back-link{
+color:var(--brand);
+font-size:.9rem;
+font-weight:650
+}.profile-placeholder{
+margin:19px 0;
+padding:30px;
+border-radius:var(--radius);
+background:var(--brand-soft);
+text-align:center
+}.profile-placeholder svg{
+color:var(--brand)
+}.profile-placeholder h1{
+margin:10px 0 4px
+}.profile-placeholder p{
+color:var(--muted)
+}code{
+font-family:inherit;
+font-weight:700
+}

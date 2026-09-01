@@ -1,0 +1,26 @@
+.payment-card{
+max-width:600px;
+padding:38px;
+border:1px solid var(--border);
+border-radius:20px;
+background:linear-gradient(145deg,var(--surface),var(--brand-soft));
+text-align:center;
+box-shadow:0 10px 24px #1c37610d
+}.payment-card svg{
+color:var(--success);
+width:40px;
+height:40px;
+padding:9px;
+box-sizing:content-box;
+background:var(--success-soft);
+border-radius:15px
+}.payment-card h2{
+font-size:1.17rem
+}.payment-card p{
+color:var(--muted);
+line-height:1.6
+}.payment-card button{
+margin-top:12px
+}.payment-card button:disabled{
+cursor:not-allowed
+}

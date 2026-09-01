@@ -1,0 +1,115 @@
+.filter-bar{
+display:grid;
+gap:12px;
+margin-bottom:13px;
+padding:14px;
+border:1px solid var(--border);
+border-radius:var(--radius);
+background:var(--surface);
+box-shadow:0 6px 18px #1c376108
+}.search-input{
+width:100%;
+display:flex;
+align-items:center;
+gap:10px;
+border:1px solid var(--border);
+border-radius:11px;
+padding:0 15px;
+background:var(--surface)
+}.search-input svg{
+color:var(--brand);
+flex:none
+}.search-input input{
+display:block!important;
+flex:1 1 auto!important;
+width:100%!important;
+min-width:0!important;
+border:0!important;
+margin:0!important;
+padding:14px 0!important;
+font-size:1rem;
+outline:none!important;
+box-shadow:none!important;
+background:transparent!important;
+color:var(--text)!important
+}.search-input input::placeholder{
+color:var(--muted);
+opacity:1
+}.search-input:focus-within{
+border-color:var(--border);
+box-shadow:none
+}.search-actions{
+display:flex;
+align-items:center;
+justify-content:space-between;
+gap:12px
+}.search-actions p{
+margin:0;
+color:var(--muted);
+font-size:.84rem
+}.filter-button{
+background:var(--brand-soft);
+border:1px solid transparent;
+border-radius:10px;
+padding:10px 15px;
+color:var(--brand);
+font-weight:750;
+display:flex;
+gap:6px;
+align-items:center;
+white-space:nowrap
+}.filter-options{
+display:grid;
+grid-template-columns:repeat(5,minmax(140px,1fr));
+gap:11px;
+padding-top:13px;
+border-top:1px solid var(--border)
+}.filter-options label{
+display:grid;
+gap:6px;
+font-size:.78rem;
+font-weight:750;
+color:var(--muted)
+}.filter-options select{
+width:100%;
+min-width:0;
+border:1px solid var(--border);
+border-radius:9px;
+background:var(--surface);
+color:var(--text);
+padding:10px;
+font:inherit;
+font-size:.87rem
+}.active-filter{
+margin:0 0 16px;
+color:var(--muted);
+font-size:.9rem
+}.active-filter strong{
+color:var(--brand)
+}.map-placeholder{
+height:190px;
+display:grid;
+place-content:center;
+text-align:center;
+gap:7px;
+border:1px dashed var(--brand);
+border-radius:var(--radius);
+background:linear-gradient(135deg,var(--brand-soft),var(--success-soft));
+color:var(--muted);
+margin-bottom:22px
+}.map-placeholder strong{
+color:var(--text);
+font-size:1.05rem
+}@media(max-width:850px){
+.filter-options{
+grid-template-columns:repeat(3,1fr)
+}
+}@media(max-width:600px){
+.search-actions{
+align-items:flex-start
+}.search-actions p{
+display:none
+}.filter-options{
+grid-template-columns:repeat(2,1fr)
+}
+}

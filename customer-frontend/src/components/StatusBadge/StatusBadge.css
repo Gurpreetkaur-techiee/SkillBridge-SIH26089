@@ -1,0 +1,15 @@
+.status{
+font-size:.72rem;
+font-weight:700;
+text-transform:capitalize;
+padding:5px 8px;
+border-radius:99px;
+background:var(--soft);
+color:var(--text)
+}.status-completed,.status-accepted{
+color:#167247;
+background:#def8e8
+}.status-cancelled{
+color:#b42318;
+background:#fee4e2
+}

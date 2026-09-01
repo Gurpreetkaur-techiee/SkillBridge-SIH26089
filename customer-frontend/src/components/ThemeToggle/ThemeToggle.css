@@ -1,0 +1,17 @@
+.theme-toggle,.language-select{
+border:1px solid var(--border);
+border-radius:10px;
+background:var(--surface);
+color:var(--text);
+height:38px;
+padding:0 11px;
+display:inline-flex;
+align-items:center;
+gap:6px;
+font:inherit;
+font-size:.78rem;
+cursor:pointer
+}.theme-toggle:hover{
+border-color:var(--brand);
+box-shadow:0 4px 12px #2563eb18
+}

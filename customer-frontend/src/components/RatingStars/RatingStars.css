@@ -1,0 +1,13 @@
+.rating-stars{
+display:flex;
+gap:5px
+}.rating-stars button{
+border:0;
+background:none;
+padding:3px;
+color:#f59e0b;
+cursor:pointer
+}.rating-stars svg{
+width:27px;
+height:27px
+}

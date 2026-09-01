@@ -1,0 +1,31 @@
+.worker-card{
+padding:17px;
+border:1px solid var(--border);
+border-radius:var(--radius);
+background:var(--surface);
+display:flex;
+gap:12px;
+align-items:center;
+box-shadow:0 6px 16px #1c37610a
+}.worker-card img{
+width:50px;
+height:50px;
+border-radius:50%;
+object-fit:cover;
+background:var(--soft)
+}.worker-card h3{
+font-size:.98rem;
+margin:0
+}.worker-card p,.worker-card span{
+font-size:.82rem;
+color:var(--muted);
+margin:4px 0;
+display:flex;
+align-items:center;
+gap:3px
+}.worker-card a{
+margin-left:auto;
+color:var(--brand);
+font-size:.85rem;
+font-weight:750
+}
