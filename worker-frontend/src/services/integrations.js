@@ -29,6 +29,9 @@
  * }
  */
 
+const delay = (ms = 300) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 // Default initial worker profile state for a newly logged-in service professional
 const DEFAULT_WORKER_PROFILE = {
   id: 'w-101',
