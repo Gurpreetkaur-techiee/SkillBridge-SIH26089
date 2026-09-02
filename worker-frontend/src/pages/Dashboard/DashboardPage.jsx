@@ -234,8 +234,8 @@ export default function DashboardPage() {
             onAction={() => navigate('/available-jobs')}
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {availableRequests.slice(0, 3).map((booking) => (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {availableRequests.slice(0, 2).map((booking) => (
               <BookingCard
                 key={booking.id}
                 booking={booking}

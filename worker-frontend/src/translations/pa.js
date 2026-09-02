@@ -56,6 +56,7 @@ export const pa = {
   },
   nav: {
     dashboard: 'ਡੈਸ਼ਬੋਰਡ',
+    home: 'ਹੋਮ',
     availableJobs: 'ਉਪਲਬਧ ਕੰਮ',
     myBookings: 'ਮੇਰੀਆਂ ਬੁਕਿੰਗਾਂ',
     notifications: 'ਸੂਚਨਾਵਾਂ',

@@ -1,37 +1,33 @@
 /**
  * SkillBridge Worker Frontend Integration Layer
- * 
+ *
  * This module acts as the contract/gateway layer between the React UI
  * and future backend services / REST / GraphQL APIs.
- * 
- * Backend developers can replace these simulated async gateways with real API calls
- * without modifying the UI components.
- * 
- * DATA CONTRACT SCHEMA (Booking Object):
- * {
- *   id: string,                   // e.g. "BK-8021"
- *   serviceCategory: string,      // e.g. "electrician", "plumber", "cleaner", etc.
- *   title: string,                // e.g. "AC Inverter Tripping & Wiring Inspection"
- *   problemDescription: string,   // Customer's issue description
- *   customerName: string,         // e.g. "Aarav Sharma"
- *   customerPhone: string,        // e.g. "+91 98111 22334"
- *   customerEmail: string,        // e.g. "aarav.sharma@example.com"
- *   locationAddress: string,      // e.g. "Block C, Greater Kailash 1"
- *   city: string,                 // e.g. "New Delhi"
- *   distanceKm: number,           // e.g. 3.8 (distance from worker's base)
- *   estimatedPayout: number,      // e.g. 450 (rate in ₹)
- *   estimatedHours: string,       // e.g. "1-2"
- *   date: string,                 // e.g. "2026-09-04" or "Today"
- *   time: string,                 // e.g. "10:30 AM"
- *   isUrgent: boolean,            // e.g. true / false
- *   status: string,               // "open" | "pending" | "accepted" | "in_progress" | "completed" | "cancelled" | "rejected"
- *   createdAt: string,            // ISO timestamp
- * }
  */
 
-// Simulated network latency
-const SIMULATE_DELAY_MS = 150;
-const delay = (ms = SIMULATE_DELAY_MS) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * DATA CONTRACT SCHEMA (Booking Object):
+ *
+ * {
+ *   id: string,
+ *   serviceCategory: string,
+ *   title: string,
+ *   problemDescription: string,
+ *   customerName: string,
+ *   customerPhone: string,
+ *   customerEmail: string,
+ *   locationAddress: string,
+ *   city: string,
+ *   distanceKm: number,
+ *   estimatedPayout: number,
+ *   estimatedHours: string,
+ *   date: string,
+ *   time: string,
+ *   isUrgent: boolean,
+ *   status: string,
+ *   createdAt: string
+ * }
+ */
 
 // Default initial worker profile state for a newly logged-in service professional
 const DEFAULT_WORKER_PROFILE = {
@@ -56,11 +52,12 @@ const DEFAULT_WORKER_PROFILE = {
   memberSince: '2024-03-15',
 };
 
-// Memory storage for live session modifications during frontend operation
 let activeWorker = { ...DEFAULT_WORKER_PROFILE };
+
 let availableBookingsState = [];
 let myBookingsState = [];
 let notificationsState = [];
+
 let earningsState = {
   totalEarnings: 0,
   thisMonth: 0,
@@ -362,7 +359,8 @@ export const bookingsGateway = {
         serviceTitle: booking.title,
         customerName: booking.customerName,
         date: new Date().toISOString().split('T')[0],
-        amount: booking.estimatedPayout,
+        completedAt: booking.completedAt,
+        amount: booking.estimatedPayout || 0,
         status: 'settled',
       });
     }
