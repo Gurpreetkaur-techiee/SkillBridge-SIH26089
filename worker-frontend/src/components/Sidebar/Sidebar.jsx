@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard,
+  House,
   Briefcase,
   CalendarCheck,
   Bell,
@@ -22,7 +22,7 @@ export default function Sidebar({ onClose, isMobile = false }) {
   const { worker, logout } = useAuth();
 
   const navItems = [
-    { to: '/dashboard', label: t('nav.dashboard'), icon: LayoutDashboard, exact: true },
+    { to: '/dashboard', label: t('nav.home'), icon: House, exact: true },
     { to: '/available-jobs', label: t('nav.availableJobs'), icon: Briefcase },
     { to: '/my-bookings', label: t('nav.myBookings'), icon: CalendarCheck },
     { to: '/notifications', label: t('nav.notifications'), icon: Bell },

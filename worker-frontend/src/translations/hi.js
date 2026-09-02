@@ -56,6 +56,7 @@ export const hi = {
   },
   nav: {
     dashboard: 'डैशबोर्ड',
+    home: 'होम',
     availableJobs: 'उपलब्ध काम',
     myBookings: 'मेरी बुकिंग्स',
     notifications: 'सूचनाएं',

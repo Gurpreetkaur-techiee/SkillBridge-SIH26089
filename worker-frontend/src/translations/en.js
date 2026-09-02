@@ -56,6 +56,7 @@ export const en = {
   },
   nav: {
     dashboard: 'Dashboard',
+    home: 'Home',
     availableJobs: 'Available Jobs',
     myBookings: 'My Bookings',
     notifications: 'Notifications',
