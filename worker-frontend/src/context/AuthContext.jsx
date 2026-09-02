@@ -1,105 +1,262 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authGateway, workerGateway } from '../services/integrations';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+} from 'react';
+
+import {
+  authGateway,
+  workerGateway,
+} from '../services/integrations';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [worker, setWorker] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Initialize session
+  const [worker, setWorker] =
+    useState(null);
+
+  const [isLoading, setIsLoading] =
+    useState(true);
+
+  const [isAuthenticated, setIsAuthenticated] =
+    useState(false);
+
+
+  // =====================================
+  // INITIALIZE FIREBASE SESSION
+  // =====================================
+
   useEffect(() => {
-    async function initSession() {
-      try {
-        const storedAuth = localStorage.getItem('skillbridge_worker_auth');
-        if (storedAuth === 'true') {
-          const profile = await authGateway.getCurrentWorker();
-          setWorker(profile);
-          setIsAuthenticated(true);
-        } else {
-          // Default authenticated demo profile for convenience
-          const profile = await authGateway.getCurrentWorker();
-          setWorker(profile);
-          setIsAuthenticated(true);
-          localStorage.setItem('skillbridge_worker_auth', 'true');
-        }
-      } catch (err) {
-        console.error('Session init error:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
 
-    initSession();
+    const unsubscribe =
+      authGateway.onAuthStateChanged(
+        async (firebaseUser) => {
+
+          try {
+
+            if (firebaseUser) {
+
+              const profile =
+                await authGateway.getCurrentWorker();
+
+              if (profile) {
+
+                setWorker(profile);
+
+                setIsAuthenticated(true);
+
+              } else {
+
+                setWorker(null);
+
+                setIsAuthenticated(false);
+
+              }
+
+            } else {
+
+              setWorker(null);
+
+              setIsAuthenticated(false);
+
+            }
+
+          } catch (error) {
+
+            console.error(
+              'Session initialization error:',
+              error
+            );
+
+            setWorker(null);
+
+            setIsAuthenticated(false);
+
+          } finally {
+
+            setIsLoading(false);
+
+          }
+
+        }
+      );
+
+
+    return () => {
+
+      unsubscribe();
+
+    };
+
   }, []);
 
-  const login = async (email, password, rememberMe = false) => {
+
+  // =====================================
+  // LOGIN
+  // =====================================
+
+  const login = async (
+    email,
+    password,
+    rememberMe = false
+  ) => {
+
     setIsLoading(true);
+
     try {
-      const res = await authGateway.login(email, password, rememberMe);
-      setWorker(res.worker);
+
+      const result =
+        await authGateway.login(
+          email,
+          password,
+          rememberMe
+        );
+
+      setWorker(result.worker);
+
       setIsAuthenticated(true);
-      localStorage.setItem('skillbridge_worker_auth', 'true');
-      return res;
+
+      return result;
+
     } finally {
+
       setIsLoading(false);
+
     }
+
   };
 
-  const register = async (registrationData) => {
+
+  // =====================================
+  // REGISTER
+  // =====================================
+
+  const register = async (
+    registrationData
+  ) => {
+
     setIsLoading(true);
+
     try {
-      const res = await authGateway.registerWorker(registrationData);
-      setWorker(res.worker);
+
+      const result =
+        await authGateway.registerWorker(
+          registrationData
+        );
+
+      setWorker(result.worker);
+
       setIsAuthenticated(true);
-      localStorage.setItem('skillbridge_worker_auth', 'true');
-      return res;
+
+      return result;
+
     } finally {
+
       setIsLoading(false);
+
     }
+
   };
+
+
+  // =====================================
+  // LOGOUT
+  // =====================================
 
   const logout = async () => {
+
+    setIsLoading(true);
+
     try {
+
       await authGateway.logout();
+
       setWorker(null);
+
       setIsAuthenticated(false);
-      localStorage.removeItem('skillbridge_worker_auth');
-    } catch (err) {
-      console.error('Logout error:', err);
+
+    } catch (error) {
+
+      console.error(
+        'Logout error:',
+        error
+      );
+
+      throw error;
+
+    } finally {
+
+      setIsLoading(false);
+
     }
+
   };
 
-  const updateProfile = async (updates) => {
-    const res = await workerGateway.updateProfile(updates);
-    if (res.success) {
-      setWorker(res.worker);
-    }
-    return res;
-  };
+
+  // =====================================
+  // UPDATE PROFILE
+  // =====================================
+
+  const updateProfile =
+    async (updates) => {
+
+      const result =
+        await workerGateway.updateProfile(
+          updates
+        );
+
+      if (result.success) {
+
+        setWorker(
+          result.worker
+        );
+
+      }
+
+      return result;
+
+    };
+
 
   return (
+
     <AuthContext.Provider
       value={{
         worker,
         isLoading,
         isAuthenticated,
+
         login,
         register,
         logout,
         updateProfile,
       }}
     >
+
       {children}
+
     </AuthContext.Provider>
+
   );
+
 }
 
+
 export function useAuth() {
-  const context = useContext(AuthContext);
+
+  const context =
+    useContext(AuthContext);
+
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+
+    throw new Error(
+      'useAuth must be used within an AuthProvider'
+    );
+
   }
+
   return context;
+
 }

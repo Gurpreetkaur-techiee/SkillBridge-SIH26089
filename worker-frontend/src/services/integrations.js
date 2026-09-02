@@ -1,446 +1,449 @@
 /**
  * SkillBridge Worker Frontend Integration Layer
- *
- * This module acts as the contract/gateway layer between the React UI
- * and future backend services / REST / GraphQL APIs.
+ * Firebase version
  */
 
-/**
- * DATA CONTRACT SCHEMA (Booking Object):
- *
- * {
- *   id: string,
- *   serviceCategory: string,
- *   title: string,
- *   problemDescription: string,
- *   customerName: string,
- *   customerPhone: string,
- *   customerEmail: string,
- *   locationAddress: string,
- *   city: string,
- *   distanceKm: number,
- *   estimatedPayout: number,
- *   estimatedHours: string,
- *   date: string,
- *   time: string,
- *   isUrgent: boolean,
- *   status: string,
- *   createdAt: string
- * }
- */
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from 'firebase/auth';
 
-// Default initial worker profile state for a newly logged-in service professional
-const DEFAULT_WORKER_PROFILE = {
-  id: 'w-101',
-  fullName: 'Rajesh Kumar',
-  email: 'rajesh.kumar@skillbridge.pro',
-  phone: '+91 98765 43210',
-  avatarUrl: null,
-  primaryService: 'electrician',
-  secondarySkills: ['Wiring', 'Appliance Setup', 'Circuit Breakers', 'Inverters'],
-  experienceYears: 6,
-  serviceArea: 'South Delhi & NCR',
-  serviceRadiusKm: 15,
-  hourlyRate: 400,
-  bio: 'Certified master electrician with 6+ years of experience in domestic and commercial electrical installations, safety inspections, and high-voltage repairs.',
-  rating: 4.9,
-  reviewsCount: 48,
-  completedJobsCount: 132,
-  isAvailable: true,
-  languages: ['English', 'Hindi', 'Punjabi'],
-  verified: true,
-  memberSince: '2024-03-15',
-};
+import {
+  doc,
+  setDoc,
+  getDoc,
+  updateDoc,
+} from 'firebase/firestore';
 
-let activeWorker = { ...DEFAULT_WORKER_PROFILE };
+import { auth, db } from '../firebase';
 
-let availableBookingsState = [];
-let myBookingsState = [];
-let notificationsState = [];
+// =================================================
+// AUTH GATEWAY
+// =================================================
 
-let earningsState = {
-  totalEarnings: 0,
-  thisMonth: 0,
-  pendingPayouts: 0,
-  completedJobsCount: 0,
-  transactions: [],
-  monthlyBreakdown: [
-    { month: 'Jan', amount: 0 },
-    { month: 'Feb', amount: 0 },
-    { month: 'Mar', amount: 0 },
-    { month: 'Apr', amount: 0 },
-    { month: 'May', amount: 0 },
-    { month: 'Jun', amount: 0 },
-  ],
-};
-
-/**
- * Authentication Gateway
- */
 export const authGateway = {
-  /**
-   * Worker Login
-   * @param {string} email
-   * @param {string} password
-   * @param {boolean} rememberMe
-   */
+  // Worker Login
   async login(email, password, rememberMe = false) {
-    await delay();
     if (!email || !password) {
       throw new Error('Email and password are required.');
     }
-    // Set active worker email
-    activeWorker.email = email;
-    if (email.includes('@')) {
-      const namePart = email.split('@')[0].replace('.', ' ');
-      activeWorker.fullName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+      const user = userCredential.user;
+
+      // Get worker profile from Firestore
+      const workerRef = doc(db, 'workers', user.uid);
+      const workerSnap = await getDoc(workerRef);
+
+      if (!workerSnap.exists()) {
+        throw new Error(
+          'Worker profile not found. Please register first.'
+        );
+      }
+
+      return {
+        success: true,
+        worker: {
+          id: user.uid,
+          ...workerSnap.data(),
+        },
+      };
+    } catch (error) {
+      console.error('Login error:', error);
+
+      if (error.code === 'auth/invalid-credential') {
+        throw new Error('Invalid email or password.');
+      }
+
+      if (error.code === 'auth/user-not-found') {
+        throw new Error('No account found with this email.');
+      }
+
+      if (error.code === 'auth/wrong-password') {
+        throw new Error('Incorrect password.');
+      }
+
+      throw new Error(error.message || 'Login failed.');
     }
-    return {
-      success: true,
-      token: 'jwt-skillbridge-worker-sample-token',
-      worker: { ...activeWorker },
-    };
   },
 
-  /**
-   * Worker Registration
-   * @param {Object} registrationData
-   */
+  // Worker Registration
   async registerWorker(registrationData) {
-    await delay();
-    if (!registrationData.email || !registrationData.fullName || !registrationData.primaryService) {
-      throw new Error('Please fill in all required registration fields.');
+    const {
+      email,
+      password,
+      fullName,
+      confirmPassword,
+      ...workerData
+    } = registrationData;
+
+    if (!email || !password || !fullName) {
+      throw new Error(
+        'Please fill in all required registration fields.'
+      );
     }
 
-    activeWorker = {
-      ...DEFAULT_WORKER_PROFILE,
-      ...registrationData,
-      id: 'w-' + Math.floor(Math.random() * 10000),
-      rating: 5.0,
-      reviewsCount: 0,
-      completedJobsCount: 0,
-      isAvailable: true,
-      verified: true,
-      memberSince: new Date().toISOString().split('T')[0],
+    try {
+      // 1. Create Firebase Authentication account
+      const userCredential =
+        await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
+
+      const user = userCredential.user;
+
+      // 2. Prepare worker profile
+      const newWorker = {
+        id: user.uid,
+        fullName,
+        email,
+        ...workerData,
+
+        rating: 0,
+        reviewsCount: 0,
+        completedJobsCount: 0,
+
+        isAvailable: true,
+        verified: false,
+
+        avatarUrl: null,
+
+        serviceRadiusKm: 15,
+
+        languages: [
+          'English',
+          'Hindi',
+        ],
+
+        memberSince:
+          new Date().toISOString().split('T')[0],
+
+        createdAt:
+          new Date().toISOString(),
+
+        updatedAt:
+          new Date().toISOString(),
+      };
+
+      // 3. Save worker profile in Firestore
+      await setDoc(
+        doc(db, 'workers', user.uid),
+        newWorker
+      );
+
+      return {
+        success: true,
+        worker: newWorker,
+      };
+
+    } catch (error) {
+      console.error(
+        'Worker registration error:',
+        error
+      );
+
+      if (error.code === 'auth/email-already-in-use') {
+        throw new Error(
+          'An account already exists with this email.'
+        );
+      }
+
+      if (error.code === 'auth/weak-password') {
+        throw new Error(
+          'Password must be at least 6 characters.'
+        );
+      }
+
+      throw new Error(
+        error.message ||
+        'Registration failed. Please try again.'
+      );
+    }
+  },
+
+  // Get Current Logged-In Worker
+  async getCurrentWorker() {
+    const user = auth.currentUser;
+
+    if (!user) {
+      return null;
+    }
+
+    const workerRef = doc(
+      db,
+      'workers',
+      user.uid
+    );
+
+    const workerSnap =
+      await getDoc(workerRef);
+
+    if (!workerSnap.exists()) {
+      return null;
+    }
+
+    return {
+      id: user.uid,
+      ...workerSnap.data(),
     };
+  },
+
+  // Logout
+  async logout() {
+    await signOut(auth);
 
     return {
       success: true,
-      worker: { ...activeWorker },
     };
   },
 
-  /**
-   * Worker Logout
-   */
-  async logout() {
-    await delay(100);
-    return { success: true };
-  },
-
-  /**
-   * Get Current Session
-   */
-  async getCurrentWorker() {
-    await delay(100);
-    return { ...activeWorker };
+  // Listen for Firebase Auth session changes
+  onAuthStateChanged(callback) {
+    return onAuthStateChanged(
+      auth,
+      callback
+    );
   },
 };
 
-/**
- * Worker Profile Gateway
- */
+
+// =================================================
+// WORKER PROFILE GATEWAY
+// =================================================
+
 export const workerGateway = {
-  /**
-   * Fetch worker profile details
-   */
+
   async getProfile() {
-    await delay();
-    return { ...activeWorker };
+    const user = auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'No worker is currently logged in.'
+      );
+    }
+
+    const workerRef = doc(
+      db,
+      'workers',
+      user.uid
+    );
+
+    const workerSnap =
+      await getDoc(workerRef);
+
+    if (!workerSnap.exists()) {
+      throw new Error(
+        'Worker profile not found.'
+      );
+    }
+
+    return {
+      id: user.uid,
+      ...workerSnap.data(),
+    };
   },
 
-  /**
-   * Update worker profile
-   * @param {Object} updates
-   */
+
   async updateProfile(updates) {
-    await delay();
-    activeWorker = { ...activeWorker, ...updates };
+    const user = auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'No worker is currently logged in.'
+      );
+    }
+
+    const workerRef = doc(
+      db,
+      'workers',
+      user.uid
+    );
+
+    const updatedData = {
+      ...updates,
+      updatedAt:
+        new Date().toISOString(),
+    };
+
+    await updateDoc(
+      workerRef,
+      updatedData
+    );
+
+    const updatedWorker =
+      await this.getProfile();
+
     return {
       success: true,
-      worker: { ...activeWorker },
+      worker: updatedWorker,
     };
   },
 
-  /**
-   * Toggle or set worker online/available status
-   * @param {boolean} isAvailable
-   */
+
   async setAvailability(isAvailable) {
-    await delay(150);
-    activeWorker.isAvailable = isAvailable;
+    const user = auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'No worker is currently logged in.'
+      );
+    }
+
+    const workerRef = doc(
+      db,
+      'workers',
+      user.uid
+    );
+
+    await updateDoc(
+      workerRef,
+      {
+        isAvailable,
+        updatedAt:
+          new Date().toISOString(),
+      }
+    );
+
     return {
       success: true,
-      isAvailable: activeWorker.isAvailable,
+      isAvailable,
     };
   },
 
-  /**
-   * Get Worker Settings
-   */
+
   async getSettings() {
-    await delay(100);
+    const worker =
+      await this.getProfile();
+
     return {
       notifications: {
         email: true,
         sms: true,
         push: true,
       },
-      serviceRadiusKm: activeWorker.serviceRadiusKm || 15,
+
+      serviceRadiusKm:
+        worker.serviceRadiusKm || 15,
+
       autoAcceptNearby: false,
     };
   },
 
-  /**
-   * Update Worker Settings
-   */
+
   async updateSettings(settings) {
-    await delay();
-    return { success: true, settings };
+    return {
+      success: true,
+      settings,
+    };
   },
 };
 
-/**
- * Bookings Gateway
- */
+
+// =================================================
+// BOOKINGS GATEWAY
+// TEMPORARY - WILL CONNECT TO FIRESTORE NEXT
+// =================================================
+
 export const bookingsGateway = {
-  /**
-   * Fetch available booking requests in worker's area
-   * @param {Object} filters
-   */
-  async getAvailableBookings(filters = {}) {
-    await delay();
-    let results = [...availableBookingsState];
 
-    if (filters.category && filters.category !== 'all') {
-      results = results.filter((b) => b.serviceCategory === filters.category);
-    }
-    if (filters.maxDistance) {
-      results = results.filter((b) => b.distanceKm <= filters.maxDistance);
-    }
-    if (filters.searchQuery) {
-      const q = filters.searchQuery.toLowerCase();
-      results = results.filter(
-        (b) =>
-          b.title?.toLowerCase().includes(q) ||
-          b.serviceCategory?.toLowerCase().includes(q) ||
-          b.locationAddress?.toLowerCase().includes(q) ||
-          b.problemDescription?.toLowerCase().includes(q)
-      );
-    }
-    return results;
+  async getAvailableBookings() {
+    return [];
   },
 
-  /**
-   * Fetch single booking details by ID
-   * @param {string} bookingId
-   */
-  async getBooking(bookingId) {
-    await delay();
-    const all = [...availableBookingsState, ...myBookingsState];
-    const found = all.find((b) => b.id === bookingId);
-    if (!found) {
-      return null;
-    }
-    return found;
+  async getBooking() {
+    return null;
   },
 
-  /**
-   * Add a new incoming booking request (called by backend listener/websocket/API)
-   * @param {Object} bookingRequest
-   */
-  async addBookingRequest(bookingRequest) {
-    await delay(50);
-    const newBooking = {
-      id: bookingRequest.id || 'BK-' + Math.floor(1000 + Math.random() * 9000),
-      serviceCategory: bookingRequest.serviceCategory || 'electrician',
-      title: bookingRequest.title || 'Service Request',
-      problemDescription: bookingRequest.problemDescription || '',
-      customerName: bookingRequest.customerName || 'Customer',
-      customerPhone: bookingRequest.customerPhone || '',
-      customerEmail: bookingRequest.customerEmail || '',
-      locationAddress: bookingRequest.locationAddress || 'Local Address',
-      city: bookingRequest.city || 'Delhi',
-      distanceKm: bookingRequest.distanceKm || 3.5,
-      estimatedPayout: bookingRequest.estimatedPayout || 400,
-      estimatedHours: bookingRequest.estimatedHours || '1-2',
-      date: bookingRequest.date || new Date().toISOString().split('T')[0],
-      time: bookingRequest.time || '10:00 AM',
-      isUrgent: !!bookingRequest.isUrgent,
-      status: 'open',
-      createdAt: new Date().toISOString(),
-    };
-    availableBookingsState.unshift(newBooking);
-    return newBooking;
+  async addBookingRequest() {
+    throw new Error(
+      'Booking integration is not connected yet.'
+    );
   },
 
-  /**
-   * Accept an available booking request
-   * @param {string} bookingId
-   */
-  async acceptBooking(bookingId) {
-    await delay();
-    const index = availableBookingsState.findIndex((b) => b.id === bookingId);
-    if (index === -1) {
-      throw new Error('Booking request not found or expired.');
-    }
-    const accepted = {
-      ...availableBookingsState[index],
-      status: 'accepted',
-      acceptedAt: new Date().toISOString(),
-    };
-    availableBookingsState.splice(index, 1);
-    myBookingsState.unshift(accepted);
-    return { success: true, booking: accepted };
+  async acceptBooking() {
+    throw new Error(
+      'Booking integration is not connected yet.'
+    );
   },
 
-  /**
-   * Reject/Decline a booking request
-   * @param {string} bookingId
-   * @param {string} reason
-   */
-  async rejectBooking(bookingId, reason = '') {
-    await delay();
-    const index = availableBookingsState.findIndex((b) => b.id === bookingId);
-    if (index !== -1) {
-      const rejected = {
-        ...availableBookingsState[index],
-        status: 'rejected',
-        rejectedReason: reason,
-      };
-      availableBookingsState.splice(index, 1);
-      myBookingsState.push(rejected);
-    }
-    return { success: true, bookingId };
+  async rejectBooking() {
+    throw new Error(
+      'Booking integration is not connected yet.'
+    );
   },
 
-  /**
-   * Fetch worker's assigned bookings (upcoming, active, completed, cancelled)
-   * @param {string} statusFilter
-   */
-  async getMyBookings(statusFilter = 'all') {
-    await delay();
-    if (!statusFilter || statusFilter === 'all') {
-      return [...myBookingsState];
-    }
-    return myBookingsState.filter((b) => b.status === statusFilter);
+  async getMyBookings() {
+    return [];
   },
 
-  /**
-   * Update booking status (e.g., start job, mark completed)
-   * @param {string} bookingId
-   * @param {string} newStatus
-   */
-  async updateBookingStatus(bookingId, newStatus) {
-    await delay();
-    const booking = myBookingsState.find((b) => b.id === bookingId);
-    if (!booking) {
-      throw new Error('Booking not found in your assignments.');
-    }
-    booking.status = newStatus;
-    if (newStatus === 'completed') {
-      booking.completedAt = new Date().toISOString();
-      earningsState.completedJobsCount += 1;
-      earningsState.totalEarnings += booking.estimatedPayout || 0;
-      earningsState.thisMonth += booking.estimatedPayout || 0;
-      earningsState.transactions.unshift({
-        id: 'tx-' + Math.floor(Math.random() * 100000),
-        bookingId: booking.id,
-        serviceTitle: booking.title,
-        customerName: booking.customerName,
-        date: new Date().toISOString().split('T')[0],
-        completedAt: booking.completedAt,
-        amount: booking.estimatedPayout || 0,
-        status: 'settled',
-      });
-    }
-    return { success: true, booking };
+  async updateBookingStatus() {
+    throw new Error(
+      'Booking integration is not connected yet.'
+    );
   },
 };
 
-/**
- * Notifications Gateway
- */
+
+// =================================================
+// NOTIFICATIONS
+// TEMPORARY
+// =================================================
+
 export const notificationsGateway = {
-  /**
-   * Fetch notifications list
-   */
+
   async getNotifications() {
-    await delay();
-    return [...notificationsState];
+    return [];
   },
 
-  /**
-   * Add a notification (called by backend events)
-   * @param {Object} notification
-   */
-  async addNotification(notification) {
-    await delay(50);
-    const item = {
-      id: 'notif-' + Date.now(),
-      type: notification.type || 'system',
-      title: notification.title || 'Notification',
-      message: notification.message || '',
-      timestamp: 'Just now',
-      isRead: false,
-      createdAt: new Date().toISOString(),
+  async addNotification() {
+    return {
+      success: true,
     };
-    notificationsState.unshift(item);
-    return item;
   },
 
-  /**
-   * Mark single notification as read
-   * @param {string} notificationId
-   */
-  async markAsRead(notificationId) {
-    await delay(100);
-    const item = notificationsState.find((n) => n.id === notificationId);
-    if (item) {
-      item.isRead = true;
-    }
-    return { success: true };
+  async markAsRead() {
+    return {
+      success: true,
+    };
   },
 
-  /**
-   * Mark all notifications as read
-   */
   async markAllAsRead() {
-    await delay(100);
-    notificationsState.forEach((n) => {
-      n.isRead = true;
-    });
-    return { success: true };
+    return {
+      success: true,
+    };
   },
 };
 
-/**
- * Earnings Gateway
- */
+
+// =================================================
+// EARNINGS
+// TEMPORARY
+// =================================================
+
 export const earningsGateway = {
-  /**
-   * Fetch earnings metrics and breakdown
-   */
+
   async getEarningsSummary() {
-    await delay();
-    return { ...earningsState };
+    return {
+      totalEarnings: 0,
+      thisMonth: 0,
+      pendingPayouts: 0,
+      completedJobsCount: 0,
+      transactions: [],
+      monthlyBreakdown: [],
+    };
   },
 
-  /**
-   * Fetch recent payout transactions
-   */
   async getTransactions() {
-    await delay();
-    return [...earningsState.transactions];
+    return [];
   },
 };
