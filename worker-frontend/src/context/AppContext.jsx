@@ -15,7 +15,7 @@ export function AppProvider({ children }) {
   // Language state with local storage persistence
   const [language, setLanguage] = useState(() => {
     const saved = localStorage.getItem('skillbridge_worker_lang');
-    if (saved && ['en', 'hi', 'pa'].includes(saved)) return saved;
+    if (saved && ['en', 'es', 'fr', 'hi'].includes(saved)) return saved;
     return 'en';
   });
 

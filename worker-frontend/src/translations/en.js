@@ -242,6 +242,12 @@ export const en = {
     bookingAlerts: 'Bookings',
     payoutAlerts: 'Payouts',
     systemAlerts: 'System',
+  
+    // Header notification dropdown
+    viewRequest: 'View Request',
+    openRequest: 'Open Request',
+    viewAll: 'View all notifications',
+  
     emptyTitle: 'No Notifications',
     emptyDesc: 'You are all caught up! New alerts and updates will appear here.',
     unreadBadge: 'Unread',
