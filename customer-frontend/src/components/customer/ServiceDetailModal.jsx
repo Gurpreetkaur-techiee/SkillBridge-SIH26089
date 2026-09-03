@@ -7,12 +7,14 @@ import {
   Calendar, 
   MapPin, 
   DollarSign,
-  AlertCircle
+  AlertCircle,
+  Receipt
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { PaymentButton } from './PaymentButton';
 
 export function ServiceDetailModal() {
   const { 
@@ -31,6 +33,7 @@ export function ServiceDetailModal() {
   const [notes, setNotes] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
   const [createdBookingData, setCreatedBookingData] = useState(null);
+  const [paymentReceipt, setPaymentReceipt] = useState(null);
 
   if (!selectedService) return null;
 
@@ -40,18 +43,29 @@ export function ServiceDetailModal() {
     setIsSuccess(false);
     setSelectedTask('');
     setNotes('');
+    setPaymentReceipt(null);
   };
 
-  const handleConfirmBooking = () => {
+  const handlePaymentSuccess = (receipt) => {
+    setPaymentReceipt(receipt);
     const booking = createBooking(
       {
         ...selectedService,
-        title: selectedTask || selectedService.title
+        title: selectedTask || selectedService.title,
+        price: receipt?.baseAmount || selectedService.price
       },
       selectedWorker,
       notes
     );
-    setCreatedBookingData(booking);
+    
+    // Attach payment info to booking preview
+    setCreatedBookingData({
+      ...booking,
+      transactionId: receipt?.transactionId || `TXN-${Math.floor(100000 + Math.random() * 900000)}`,
+      paymentMethod: receipt?.paymentMethod || 'Credit/Debit Card',
+      totalPaid: receipt?.totalPaid || `$${selectedService.price + 2.50}`
+    });
+
     setIsSuccess(true);
   };
 
@@ -66,13 +80,13 @@ export function ServiceDetailModal() {
     <Modal
       isOpen={!!selectedService}
       onClose={handleClose}
-      title={isSuccess ? "Booking Confirmed! 🎉" : `${selectedService.title} Service`}
-      subtitle={isSuccess ? "A verified pro is being assigned to your request" : "Customize your service requirements and schedule"}
+      title={isSuccess ? "Booking & Payment Confirmed! 🎉" : `${selectedService.title} Service`}
+      subtitle={isSuccess ? "A verified pro is being dispatched to your location" : "Customize your service requirements and complete checkout"}
       maxWidth="max-w-lg"
     >
       {isSuccess ? (
         <div className="text-center py-4 space-y-5">
-          <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto ring-8 ring-emerald-50 dark:ring-emerald-900/30">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto ring-8 ring-emerald-50 dark:ring-emerald-900/30 animate-bounce-short">
             <CheckCircle2 className="w-8 h-8" />
           </div>
 
@@ -81,11 +95,11 @@ export function ServiceDetailModal() {
               Booking #{createdBookingData?.id}
             </h4>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Your technician will arrive at <span className="font-semibold text-slate-700 dark:text-slate-200">{userLocation}</span>
+              Your pro will arrive at <span className="font-semibold text-slate-700 dark:text-slate-200">{userLocation}</span>
             </p>
           </div>
 
-          <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl text-left space-y-2 text-xs">
+          <div className="bg-slate-50 dark:bg-slate-800/60 p-4 rounded-2xl text-left space-y-2 text-xs border border-slate-200/80 dark:border-slate-700/60">
             <div className="flex justify-between">
               <span className="text-slate-500">Service:</span>
               <span className="font-bold text-slate-900 dark:text-white">{createdBookingData?.serviceName}</span>
@@ -95,15 +109,25 @@ export function ServiceDetailModal() {
               <span className="font-semibold text-slate-700 dark:text-slate-300">{selectedTimeSlot}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Estimated Total:</span>
-              <span className="font-bold text-blue-600 dark:text-blue-400">{createdBookingData?.amount}</span>
+              <span className="text-slate-500">Payment Status:</span>
+              <span className="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Paid via {createdBookingData?.paymentMethod}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Transaction Ref:</span>
+              <span className="font-mono text-slate-700 dark:text-slate-300">{createdBookingData?.transactionId}</span>
+            </div>
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-between">
+              <span className="text-slate-500 font-semibold">Total Paid:</span>
+              <span className="font-extrabold text-sm text-blue-600 dark:text-blue-400">{createdBookingData?.totalPaid || createdBookingData?.amount}</span>
             </div>
           </div>
 
           <div className="pt-2 flex gap-3">
             <Button
               variant="primary"
-              className="w-full"
+              className="w-full font-bold"
               onClick={handleClose}
             >
               Done
@@ -201,21 +225,23 @@ export function ServiceDetailModal() {
             />
           </div>
 
-          {/* Bottom Actions */}
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-3">
+          {/* Bottom Actions with Integrated Payment Button */}
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
             <Button
               variant="ghost"
               onClick={handleClose}
             >
               Cancel
             </Button>
-            <Button
-              variant="primary"
-              onClick={handleConfirmBooking}
+
+            {/* Dedicated Reusable PaymentButton Component */}
+            <PaymentButton
+              amount={selectedService.price}
+              serviceName={selectedTask || selectedService.title}
+              onSuccess={handlePaymentSuccess}
+              buttonText={`Proceed to Pay • $${selectedService.price}`}
               className="px-6"
-            >
-              Confirm Booking
-            </Button>
+            />
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   Mail, 
@@ -12,25 +12,40 @@ import {
   Plus, 
   Check, 
   Camera,
-  Trash2
+  Trash2,
+  LogIn,
+  LogOut,
+  UserPlus
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 
 export function ProfileView() {
   const { userProfile, setUserProfile } = useApp();
+  const { currentUser, logout, openAuthModal } = useAuth();
   const { lang, setLang, t, supportedLanguages } = useLanguage();
   const { theme, toggleTheme, isDark } = useTheme();
 
   const [formData, setFormData] = useState({
-    name: userProfile.name,
-    email: userProfile.email,
+    name: currentUser?.displayName || userProfile.name,
+    email: currentUser?.email || userProfile.email,
     phone: userProfile.phone,
     address: userProfile.address
   });
+
+  useEffect(() => {
+    if (currentUser) {
+      setFormData(prev => ({
+        ...prev,
+        name: currentUser.displayName || prev.name,
+        email: currentUser.email || prev.email
+      }));
+    }
+  }, [currentUser]);
 
   const [isSaved, setIsSaved] = useState(false);
 
@@ -46,32 +61,73 @@ export function ProfileView() {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl">
-      {/* Header */}
-      <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-soft flex flex-col sm:flex-row items-center gap-5">
-        <div className="relative">
-          <img
-            src={userProfile.avatar}
-            alt={userProfile.name}
-            className="w-20 h-20 rounded-3xl object-cover ring-4 ring-blue-500/20 shadow-md"
-          />
-          <button 
-            onClick={() => alert("Upload photo feature ready")}
-            className="absolute -bottom-1 -right-1 p-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-transform active:scale-95"
-          >
-            <Camera className="w-3.5 h-3.5" />
-          </button>
+      {/* Header Profile Card */}
+      <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-soft flex flex-col sm:flex-row items-center justify-between gap-5">
+        <div className="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left">
+          <div className="relative">
+            <img
+              src={currentUser?.photoURL || userProfile.avatar}
+              alt={currentUser?.displayName || userProfile.name}
+              className="w-20 h-20 rounded-3xl object-cover ring-4 ring-blue-500/20 shadow-md"
+            />
+            <button 
+              onClick={() => alert("Upload photo feature ready")}
+              className="absolute -bottom-1 -right-1 p-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-transform active:scale-95"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div>
+            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
+              {currentUser?.displayName || userProfile.name}
+            </h1>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {currentUser ? `Signed in as ${currentUser.email}` : 'Guest Visitor • Sign in to sync your bookings across devices'}
+            </p>
+            <div className="flex items-center gap-2 mt-2">
+              <span className={`px-2.5 py-0.5 text-xs font-semibold rounded-full ${
+                currentUser 
+                  ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300' 
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+              }`}>
+                {currentUser ? 'Verified Account' : 'Guest Mode'}
+              </span>
+            </div>
+          </div>
         </div>
 
-        <div className="text-center sm:text-left flex-1">
-          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
-            {userProfile.name}
-          </h1>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Customer Member since 2024 • 14 completed service requests
-          </p>
-          <span className="inline-block mt-2 px-2.5 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-            Verified Account
-          </span>
+        <div>
+          {currentUser ? (
+            <Button
+              variant="outline"
+              size="sm"
+              icon={LogOut}
+              onClick={logout}
+              className="text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+            >
+              Sign Out
+            </Button>
+          ) : (
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                icon={LogIn}
+                onClick={() => openAuthModal('login')}
+              >
+                Sign In
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                icon={UserPlus}
+                onClick={() => openAuthModal('signup')}
+              >
+                Sign Up
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -198,7 +254,7 @@ export function ProfileView() {
                 onClick={toggleTheme}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
               >
-                {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+                {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-700" />}
                 <span>{isDark ? 'Light' : 'Dark'}</span>
               </button>
             </div>
@@ -211,7 +267,7 @@ export function ProfileView() {
               <span>SkillBridge Trust & Security</span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              All transactions are secured with 256-bit encryption. Your payment is held in escrow until service completion is confirmed.
+              All transactions and customer profiles are secured with Firebase Authentication and 256-bit encryption.
             </p>
           </Card>
         </div>

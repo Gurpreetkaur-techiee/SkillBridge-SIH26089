@@ -11,11 +11,16 @@ import {
   Sparkles,
   CheckCircle2,
   Clock,
-  ArrowRight
+  ArrowRight,
+  LogOut,
+  User,
+  LogIn,
+  UserPlus
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { Button } from '../ui/Button';
 
 export function Header({ onToggleMobileMenu, isMobileMenuOpen }) {
@@ -25,11 +30,16 @@ export function Header({ onToggleMobileMenu, isMobileMenuOpen }) {
     unreadNotificationsCount, 
     notifications, 
     setActiveTab, 
-    userProfile,
     searchQuery,
     setSearchQuery,
     markAllNotificationsRead
   } = useApp();
+
+  const { 
+    currentUser, 
+    logout, 
+    openAuthModal 
+  } = useAuth();
 
   const [isLangOpen, setIsLangOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
@@ -55,6 +65,11 @@ export function Header({ onToggleMobileMenu, isMobileMenuOpen }) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const handleLogout = async () => {
+    setIsProfileMenuOpen(false);
+    await logout();
+  };
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors duration-200">
@@ -111,7 +126,7 @@ export function Header({ onToggleMobileMenu, isMobileMenuOpen }) {
             </div>
           </div>
 
-          {/* Right: Actions (Language, Theme Toggle, Notifications, Profile) */}
+          {/* Right: Actions (Language, Theme Toggle, Notifications, Auth / Profile) */}
           <div className="flex items-center gap-1.5 sm:gap-3">
             
             {/* Language Selector Dropdown */}
@@ -160,7 +175,7 @@ export function Header({ onToggleMobileMenu, isMobileMenuOpen }) {
               aria-label="Toggle Theme"
             >
               {isDark ? (
-                <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400 animate-spin-slow" />
+                <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-amber-400" />
               ) : (
                 <Moon className="w-4 h-4 sm:w-5 sm:h-5 text-slate-700" />
               )}
@@ -265,57 +280,98 @@ export function Header({ onToggleMobileMenu, isMobileMenuOpen }) {
               )}
             </div>
 
-            {/* Profile Avatar / Dropdown */}
-            <div className="relative" ref={profileRef}>
-              <button
-                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                className="flex items-center gap-2 p-1 sm:px-2 sm:py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-              >
-                <img
-                  src={userProfile.avatar}
-                  alt={userProfile.name}
-                  className="w-8 h-8 rounded-xl object-cover ring-2 ring-blue-500/30"
-                />
-                <span className="hidden xl:inline-block text-xs font-semibold text-slate-700 dark:text-slate-200 text-left">
-                  {userProfile.name}
-                </span>
-                <ChevronDown className="hidden xl:inline-block w-3.5 h-3.5 text-slate-400" />
-              </button>
+            {/* Authentication States */}
+            {currentUser ? (
+              /* Authenticated User Profile Dropdown */
+              <div className="relative" ref={profileRef}>
+                <button
+                  onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+                  className="flex items-center gap-2 p-1 sm:px-2 sm:py-1 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <img
+                    src={currentUser.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250'}
+                    alt={currentUser.displayName || 'User'}
+                    className="w-8 h-8 rounded-xl object-cover ring-2 ring-blue-500/30"
+                  />
+                  <span className="hidden xl:inline-block text-xs font-semibold text-slate-700 dark:text-slate-200 text-left truncate max-w-[120px]">
+                    {currentUser.displayName || currentUser.email?.split('@')[0]}
+                  </span>
+                  <ChevronDown className="hidden xl:inline-block w-3.5 h-3.5 text-slate-400" />
+                </button>
 
-              {isProfileMenuOpen && (
-                <div className="absolute right-0 mt-2 w-52 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-50 animate-scale-up">
-                  <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
-                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                      {userProfile.name}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                      {userProfile.email}
-                    </p>
-                  </div>
+                {isProfileMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-50 animate-scale-up">
+                    <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800">
+                      <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                        {currentUser.displayName || 'Customer Pro'}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                        {currentUser.email}
+                      </p>
+                    </div>
 
-                  <div className="py-1">
-                    <button
-                      onClick={() => {
-                        setActiveTab('profile');
-                        setIsProfileMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    >
-                      {t('navProfile')}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setActiveTab('bookings');
-                        setIsProfileMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                    >
-                      {t('navBookings')}
-                    </button>
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          setActiveTab('profile');
+                          setIsProfileMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      >
+                        <User className="w-4 h-4 text-slate-400" />
+                        <span>{t('navProfile')}</span>
+                      </button>
+                      
+                      <button
+                        onClick={() => {
+                          setActiveTab('bookings');
+                          setIsProfileMenuOpen(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      >
+                        <Clock className="w-4 h-4 text-slate-400" />
+                        <span>{t('navBookings')}</span>
+                      </button>
+                    </div>
+
+                    <div className="pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2.5 px-4 py-2 text-xs sm:text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 font-semibold transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : (
+              /* Unauthenticated: Visible Sign In and Sign Up Buttons */
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => openAuthModal('login')}
+                  className="text-xs sm:text-sm px-2.5 sm:px-3.5 font-semibold text-slate-700 dark:text-slate-200"
+                  icon={LogIn}
+                >
+                  <span className="hidden xs:inline">Sign In</span>
+                  <span className="xs:hidden">Login</span>
+                </Button>
+
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => openAuthModal('signup')}
+                  className="text-xs sm:text-sm px-3 sm:px-4 font-bold shadow-sm"
+                  icon={UserPlus}
+                >
+                  <span className="hidden sm:inline">Sign Up</span>
+                  <span className="sm:hidden">Join</span>
+                </Button>
+              </div>
+            )}
 
           </div>
 
