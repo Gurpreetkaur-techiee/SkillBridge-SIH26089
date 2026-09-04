@@ -1,17 +1,20 @@
 import { en } from './en.js';
 import { hi } from './hi.js';
-import { pa } from './pa.js';
+import { es } from './es.js';
+import { fr } from './fr.js';
 
 export const translations = {
   en,
+  es,
+  fr,
   hi,
-  pa,
 };
 
 export const availableLanguages = [
   { code: 'en', label: 'English', nativeName: 'English' },
+  { code: 'es', label: 'Spanish', nativeName: 'Español' },
+  { code: 'fr', label: 'French', nativeName: 'Français' },
   { code: 'hi', label: 'Hindi', nativeName: 'हिंदी' },
-  { code: 'pa', label: 'Punjabi', nativeName: 'ਪੰਜਾਬੀ' },
 ];
 
 export function getTranslation(lang, keyPath, params = {}) {
@@ -21,6 +24,7 @@ export function getTranslation(lang, keyPath, params = {}) {
   const resolve = (dict, path) => {
     const keys = path.split('.');
     let result = dict;
+
     for (const key of keys) {
       if (result && typeof result === 'object' && key in result) {
         result = result[key];
@@ -28,15 +32,22 @@ export function getTranslation(lang, keyPath, params = {}) {
         return null;
       }
     }
+
     return typeof result === 'string' ? result : null;
   };
 
-  let text = resolve(currentDict, keyPath) || resolve(fallbackDict, keyPath) || keyPath;
+  let text =
+    resolve(currentDict, keyPath) ||
+    resolve(fallbackDict, keyPath) ||
+    keyPath;
 
   // Interpolate params e.g. {count}, {hours}
   if (params && typeof params === 'object') {
     Object.keys(params).forEach((paramKey) => {
-      text = text.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), params[paramKey]);
+      text = text.replace(
+        new RegExp(`\\{${paramKey}\\}`, 'g'),
+        params[paramKey]
+      );
     });
   }
 

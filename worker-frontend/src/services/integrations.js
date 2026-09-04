@@ -1,6 +1,6 @@
 /**
  * SkillBridge Worker Frontend Integration Layer
- * Firebase version
+ * Firebase Version
  */
 
 import {
@@ -8,40 +8,69 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
 } from 'firebase/auth';
 
 import {
   doc,
   setDoc,
   getDoc,
+  getDocs,
   updateDoc,
+  collection,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  Timestamp,
 } from 'firebase/firestore';
 
 import { auth, db } from '../firebase';
+
 
 // =================================================
 // AUTH GATEWAY
 // =================================================
 
 export const authGateway = {
-  // Worker Login
+
+  /**
+   * Worker Login
+   */
   async login(email, password, rememberMe = false) {
     if (!email || !password) {
-      throw new Error('Email and password are required.');
+      throw new Error(
+        'Email and password are required.'
+      );
     }
 
     try {
-      const userCredential = await signInWithEmailAndPassword(
+      await setPersistence(
         auth,
-        email,
-        password
+        rememberMe
+          ? browserLocalPersistence
+          : browserSessionPersistence
       );
+
+      const userCredential =
+        await signInWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
 
       const user = userCredential.user;
 
-      // Get worker profile from Firestore
-      const workerRef = doc(db, 'workers', user.uid);
-      const workerSnap = await getDoc(workerRef);
+      const workerRef = doc(
+        db,
+        'workers',
+        user.uid
+      );
+
+      const workerSnap =
+        await getDoc(workerRef);
 
       if (!workerSnap.exists()) {
         throw new Error(
@@ -56,27 +85,50 @@ export const authGateway = {
           ...workerSnap.data(),
         },
       };
+
     } catch (error) {
-      console.error('Login error:', error);
+      console.error(
+        'Login error:',
+        error
+      );
 
-      if (error.code === 'auth/invalid-credential') {
-        throw new Error('Invalid email or password.');
+      switch (error.code) {
+
+        case 'auth/invalid-credential':
+          throw new Error(
+            'Invalid email or password.'
+          );
+
+        case 'auth/user-not-found':
+          throw new Error(
+            'No account found with this email.'
+          );
+
+        case 'auth/wrong-password':
+          throw new Error(
+            'Incorrect password.'
+          );
+
+        case 'auth/invalid-email':
+          throw new Error(
+            'Please enter a valid email address.'
+          );
+
+        default:
+          throw new Error(
+            error.message ||
+            'Login failed.'
+          );
       }
-
-      if (error.code === 'auth/user-not-found') {
-        throw new Error('No account found with this email.');
-      }
-
-      if (error.code === 'auth/wrong-password') {
-        throw new Error('Incorrect password.');
-      }
-
-      throw new Error(error.message || 'Login failed.');
     }
   },
 
-  // Worker Registration
+
+  /**
+   * Worker Registration
+   */
   async registerWorker(registrationData) {
+
     const {
       email,
       password,
@@ -85,14 +137,33 @@ export const authGateway = {
       ...workerData
     } = registrationData;
 
-    if (!email || !password || !fullName) {
+    if (
+      !email ||
+      !password ||
+      !fullName
+    ) {
       throw new Error(
         'Please fill in all required registration fields.'
       );
     }
 
+    if (password.length < 6) {
+      throw new Error(
+        'Password must be at least 6 characters.'
+      );
+    }
+
+    if (
+      confirmPassword &&
+      password !== confirmPassword
+    ) {
+      throw new Error(
+        'Passwords do not match.'
+      );
+    }
+
     try {
-      // 1. Create Firebase Authentication account
+
       const userCredential =
         await createUserWithEmailAndPassword(
           auth,
@@ -100,46 +171,62 @@ export const authGateway = {
           password
         );
 
-      const user = userCredential.user;
+      const user =
+        userCredential.user;
 
-      // 2. Prepare worker profile
       const newWorker = {
         id: user.uid,
+
         fullName,
         email,
+
         ...workerData,
 
         rating: 0,
+
         reviewsCount: 0,
+
         completedJobsCount: 0,
 
         isAvailable: true,
+
         verified: false,
 
         avatarUrl: null,
 
-        serviceRadiusKm: 15,
+        serviceRadiusKm:
+          workerData.serviceRadiusKm || 15,
 
-        languages: [
-          'English',
-          'Hindi',
-        ],
+        languages:
+          workerData.languages || [
+            'English',
+            'Hindi',
+          ],
 
         memberSince:
-          new Date().toISOString().split('T')[0],
+          new Date()
+            .toISOString()
+            .split('T')[0],
 
         createdAt:
-          new Date().toISOString(),
+          new Date()
+            .toISOString(),
 
         updatedAt:
-          new Date().toISOString(),
+          new Date()
+            .toISOString(),
       };
 
-      // 3. Save worker profile in Firestore
+
       await setDoc(
-        doc(db, 'workers', user.uid),
+        doc(
+          db,
+          'workers',
+          user.uid
+        ),
         newWorker
       );
+
 
       return {
         success: true,
@@ -147,68 +234,119 @@ export const authGateway = {
       };
 
     } catch (error) {
+
       console.error(
         'Worker registration error:',
         error
       );
 
-      if (error.code === 'auth/email-already-in-use') {
-        throw new Error(
-          'An account already exists with this email.'
-        );
-      }
+      switch (error.code) {
 
-      if (error.code === 'auth/weak-password') {
-        throw new Error(
-          'Password must be at least 6 characters.'
-        );
-      }
+        case 'auth/email-already-in-use':
+          throw new Error(
+            'An account already exists with this email.'
+          );
 
-      throw new Error(
-        error.message ||
-        'Registration failed. Please try again.'
-      );
+        case 'auth/weak-password':
+          throw new Error(
+            'Password must be at least 6 characters.'
+          );
+
+        case 'auth/invalid-email':
+          throw new Error(
+            'Please enter a valid email address.'
+          );
+
+        default:
+          throw new Error(
+            error.message ||
+            'Registration failed. Please try again.'
+          );
+      }
     }
   },
 
-  // Get Current Logged-In Worker
+
+  /**
+   * Get Current Worker
+   */
   async getCurrentWorker() {
-    const user = auth.currentUser;
+
+    const user =
+      auth.currentUser;
 
     if (!user) {
       return null;
     }
 
-    const workerRef = doc(
-      db,
-      'workers',
-      user.uid
-    );
+    try {
 
-    const workerSnap =
-      await getDoc(workerRef);
+      const workerRef =
+        doc(
+          db,
+          'workers',
+          user.uid
+        );
 
-    if (!workerSnap.exists()) {
+      const workerSnap =
+        await getDoc(
+          workerRef
+        );
+
+      if (!workerSnap.exists()) {
+        return null;
+      }
+
+      return {
+        id: user.uid,
+        ...workerSnap.data(),
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Get current worker error:',
+        error
+      );
+
       return null;
     }
-
-    return {
-      id: user.uid,
-      ...workerSnap.data(),
-    };
   },
 
-  // Logout
+
+  /**
+   * Logout
+   */
   async logout() {
-    await signOut(auth);
 
-    return {
-      success: true,
-    };
+    try {
+
+      await signOut(auth);
+
+      return {
+        success: true,
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Logout error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Logout failed.'
+      );
+    }
   },
 
-  // Listen for Firebase Auth session changes
+
+  /**
+   * Auth State Listener
+   */
   onAuthStateChanged(callback) {
+
     return onAuthStateChanged(
       auth,
       callback
@@ -218,13 +356,19 @@ export const authGateway = {
 
 
 // =================================================
-// WORKER PROFILE GATEWAY
+// WORKER GATEWAY
 // =================================================
 
 export const workerGateway = {
 
+
+  /**
+   * Get Worker Profile
+   */
   async getProfile() {
-    const user = auth.currentUser;
+
+    const user =
+      auth.currentUser;
 
     if (!user) {
       throw new Error(
@@ -232,14 +376,17 @@ export const workerGateway = {
       );
     }
 
-    const workerRef = doc(
-      db,
-      'workers',
-      user.uid
-    );
+    const workerRef =
+      doc(
+        db,
+        'workers',
+        user.uid
+      );
 
     const workerSnap =
-      await getDoc(workerRef);
+      await getDoc(
+        workerRef
+      );
 
     if (!workerSnap.exists()) {
       throw new Error(
@@ -254,8 +401,13 @@ export const workerGateway = {
   },
 
 
+  /**
+   * Update Worker Profile
+   */
   async updateProfile(updates) {
-    const user = auth.currentUser;
+
+    const user =
+      auth.currentUser;
 
     if (!user) {
       throw new Error(
@@ -263,35 +415,57 @@ export const workerGateway = {
       );
     }
 
-    const workerRef = doc(
-      db,
-      'workers',
-      user.uid
-    );
+    try {
 
-    const updatedData = {
-      ...updates,
-      updatedAt:
-        new Date().toISOString(),
-    };
+      const workerRef =
+        doc(
+          db,
+          'workers',
+          user.uid
+        );
 
-    await updateDoc(
-      workerRef,
-      updatedData
-    );
+      await updateDoc(
+        workerRef,
+        {
+          ...updates,
 
-    const updatedWorker =
-      await this.getProfile();
+          updatedAt:
+            new Date()
+              .toISOString(),
+        }
+      );
 
-    return {
-      success: true,
-      worker: updatedWorker,
-    };
+      const updatedWorker =
+        await this.getProfile();
+
+      return {
+        success: true,
+        worker:
+          updatedWorker,
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Update profile error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to update profile.'
+      );
+    }
   },
 
 
+  /**
+   * Worker Availability
+   */
   async setAvailability(isAvailable) {
-    const user = auth.currentUser;
+
+    const user =
+      auth.currentUser;
 
     if (!user) {
       throw new Error(
@@ -299,18 +473,21 @@ export const workerGateway = {
       );
     }
 
-    const workerRef = doc(
-      db,
-      'workers',
-      user.uid
-    );
+    const workerRef =
+      doc(
+        db,
+        'workers',
+        user.uid
+      );
 
     await updateDoc(
       workerRef,
       {
         isAvailable,
+
         updatedAt:
-          new Date().toISOString(),
+          new Date()
+            .toISOString(),
       }
     );
 
@@ -321,7 +498,11 @@ export const workerGateway = {
   },
 
 
+  /**
+   * Worker Settings
+   */
   async getSettings() {
+
     const worker =
       await this.getProfile();
 
@@ -340,7 +521,11 @@ export const workerGateway = {
   },
 
 
+  /**
+   * Update Settings
+   */
   async updateSettings(settings) {
+
     return {
       success: true,
       settings,
@@ -351,52 +536,600 @@ export const workerGateway = {
 
 // =================================================
 // BOOKINGS GATEWAY
-// TEMPORARY - WILL CONNECT TO FIRESTORE NEXT
+// FIRESTORE
 // =================================================
 
 export const bookingsGateway = {
 
+
+  /**
+   * Get all available bookings
+   */
   async getAvailableBookings() {
-    return [];
+
+    try {
+
+      const bookingsRef =
+        collection(
+          db,
+          'bookings'
+        );
+
+      const snapshot =
+        await getDocs(
+          bookingsRef
+        );
+
+      const bookings =
+        snapshot.docs.map(
+          (document) => {
+
+            const data =
+              document.data();
+
+            return {
+              id:
+                document.id,
+
+              ...data,
+
+              createdAt:
+                data.createdAt?.toDate
+                  ? data.createdAt
+                      .toDate()
+                      .toISOString()
+                  : data.createdAt,
+            };
+          }
+        );
+
+
+      return bookings.filter(
+        (booking) =>
+          !booking.workerId &&
+          (
+            !booking.status ||
+            booking.status === 'open' ||
+            booking.status === 'pending'
+          )
+      );
+
+    } catch (error) {
+
+      console.error(
+        'Get available bookings error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to load available bookings.'
+      );
+    }
   },
 
-  async getBooking() {
-    return null;
+
+  /**
+   * Get Single Booking
+   */
+  async getBooking(bookingId) {
+
+    if (!bookingId) {
+      throw new Error(
+        'Booking ID is required.'
+      );
+    }
+
+    try {
+
+      const bookingRef =
+        doc(
+          db,
+          'bookings',
+          bookingId
+        );
+
+      const bookingSnap =
+        await getDoc(
+          bookingRef
+        );
+
+      if (!bookingSnap.exists()) {
+        return null;
+      }
+
+      const data =
+        bookingSnap.data();
+
+      return {
+        id:
+          bookingSnap.id,
+
+        ...data,
+
+        createdAt:
+          data.createdAt?.toDate
+            ? data.createdAt
+                .toDate()
+                .toISOString()
+            : data.createdAt,
+
+        updatedAt:
+          data.updatedAt?.toDate
+            ? data.updatedAt
+                .toDate()
+                .toISOString()
+            : data.updatedAt,
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Get booking error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to load booking.'
+      );
+    }
   },
 
-  async addBookingRequest() {
-    throw new Error(
-      'Booking integration is not connected yet.'
-    );
+
+  /**
+   * Add Booking Request
+   * Mainly for Customer Side
+   */
+  async addBookingRequest(bookingData) {
+
+    try {
+
+      const bookingRef =
+        doc(
+          collection(
+            db,
+            'bookings'
+          )
+        );
+
+      const booking =
+        {
+          ...bookingData,
+
+          status:
+            'open',
+
+          workerId:
+            null,
+
+          createdAt:
+            serverTimestamp(),
+
+          updatedAt:
+            serverTimestamp(),
+        };
+
+
+      await setDoc(
+        bookingRef,
+        booking
+      );
+
+
+      return {
+        success: true,
+
+        booking: {
+          id:
+            bookingRef.id,
+
+          ...booking,
+        },
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Add booking error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to create booking.'
+      );
+    }
   },
 
-  async acceptBooking() {
-    throw new Error(
-      'Booking integration is not connected yet.'
-    );
+
+  /**
+   * Worker Accept Booking
+   */
+  async acceptBooking(bookingId) {
+
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'Please login first.'
+      );
+    }
+
+    try {
+
+      const bookingRef =
+        doc(
+          db,
+          'bookings',
+          bookingId
+        );
+
+      const bookingSnap =
+        await getDoc(
+          bookingRef
+        );
+
+      if (!bookingSnap.exists()) {
+        throw new Error(
+          'Booking not found.'
+        );
+      }
+
+
+      const bookingData =
+        bookingSnap.data();
+
+
+      if (
+        bookingData.workerId &&
+        bookingData.workerId !== user.uid
+      ) {
+        throw new Error(
+          'This booking has already been accepted by another worker.'
+        );
+      }
+
+
+      await updateDoc(
+        bookingRef,
+        {
+          workerId:
+            user.uid,
+
+          status:
+            'accepted',
+
+          acceptedAt:
+            serverTimestamp(),
+
+          updatedAt:
+            serverTimestamp(),
+        }
+      );
+
+
+      const updatedBooking =
+        await this.getBooking(
+          bookingId
+        );
+
+
+      return {
+        success: true,
+
+        booking:
+          updatedBooking,
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Accept booking error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to accept booking.'
+      );
+    }
   },
 
-  async rejectBooking() {
-    throw new Error(
-      'Booking integration is not connected yet.'
-    );
+
+  /**
+   * Reject Booking
+   */
+  async rejectBooking(bookingId) {
+
+    try {
+
+      const bookingRef =
+        doc(
+          db,
+          'bookings',
+          bookingId
+        );
+
+      await updateDoc(
+        bookingRef,
+        {
+          status:
+            'rejected',
+
+          rejectedAt:
+            serverTimestamp(),
+
+          updatedAt:
+            serverTimestamp(),
+        }
+      );
+
+
+      return {
+        success: true,
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Reject booking error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to reject booking.'
+      );
+    }
   },
 
+
+  /**
+   * Get Logged-in Worker's Bookings
+   */
   async getMyBookings() {
-    return [];
+
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'Please login first.'
+      );
+    }
+
+    try {
+
+      const bookingsRef =
+        collection(
+          db,
+          'bookings'
+        );
+
+
+      const q =
+        query(
+          bookingsRef,
+          where(
+            'workerId',
+            '==',
+            user.uid
+          )
+        );
+
+
+      const snapshot =
+        await getDocs(
+          q
+        );
+
+
+      return snapshot.docs.map(
+        (document) => {
+
+          const data =
+            document.data();
+
+          return {
+            id:
+              document.id,
+
+            ...data,
+
+            createdAt:
+              data.createdAt?.toDate
+                ? data.createdAt
+                    .toDate()
+                    .toISOString()
+                : data.createdAt,
+
+            updatedAt:
+              data.updatedAt?.toDate
+                ? data.updatedAt
+                    .toDate()
+                    .toISOString()
+                : data.updatedAt,
+          };
+        }
+      );
+
+    } catch (error) {
+
+      console.error(
+        'Get my bookings error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to load your bookings.'
+      );
+    }
   },
 
-  async updateBookingStatus() {
-    throw new Error(
-      'Booking integration is not connected yet.'
-    );
+
+  /**
+   * Update Booking Status
+   */
+  async updateBookingStatus(
+    bookingId,
+    newStatus
+  ) {
+
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'Please login first.'
+      );
+    }
+
+    try {
+
+      const bookingRef =
+        doc(
+          db,
+          'bookings',
+          bookingId
+        );
+
+
+      const bookingSnap =
+        await getDoc(
+          bookingRef
+        );
+
+
+      if (!bookingSnap.exists()) {
+        throw new Error(
+          'Booking not found.'
+        );
+      }
+
+
+      const bookingData =
+        bookingSnap.data();
+
+
+      if (
+        bookingData.workerId !==
+        user.uid
+      ) {
+        throw new Error(
+          'You are not assigned to this booking.'
+        );
+      }
+
+
+      const updateData =
+        {
+          status:
+            newStatus,
+
+          updatedAt:
+            serverTimestamp(),
+        };
+
+
+      if (
+        newStatus ===
+        'in_progress'
+      ) {
+        updateData.startedAt =
+          serverTimestamp();
+      }
+
+
+      if (
+        newStatus ===
+        'completed'
+      ) {
+
+        updateData.completedAt =
+          serverTimestamp();
+
+        const workerRef =
+          doc(
+            db,
+            'workers',
+            user.uid
+          );
+
+
+        const workerSnap =
+          await getDoc(
+            workerRef
+          );
+
+
+        if (
+          workerSnap.exists()
+        ) {
+
+          const workerData =
+            workerSnap.data();
+
+          const currentCompleted =
+            Number(
+              workerData.completedJobsCount ||
+              0
+            );
+
+
+          await updateDoc(
+            workerRef,
+            {
+              completedJobsCount:
+                currentCompleted + 1,
+
+              updatedAt:
+                serverTimestamp(),
+            }
+          );
+        }
+      }
+
+
+      await updateDoc(
+        bookingRef,
+        updateData
+      );
+
+
+      const updatedBooking =
+        await this.getBooking(
+          bookingId
+        );
+
+
+      return {
+        success: true,
+
+        booking:
+          updatedBooking,
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Update booking status error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to update booking status.'
+      );
+    }
   },
 };
 
 
 // =================================================
-// NOTIFICATIONS
-// TEMPORARY
+// NOTIFICATIONS GATEWAY
 // =================================================
 
 export const notificationsGateway = {
@@ -426,13 +1159,13 @@ export const notificationsGateway = {
 
 
 // =================================================
-// EARNINGS
-// TEMPORARY
+// EARNINGS GATEWAY
 // =================================================
 
 export const earningsGateway = {
 
   async getEarningsSummary() {
+
     return {
       totalEarnings: 0,
       thisMonth: 0,
@@ -442,6 +1175,7 @@ export const earningsGateway = {
       monthlyBreakdown: [],
     };
   },
+
 
   async getTransactions() {
     return [];

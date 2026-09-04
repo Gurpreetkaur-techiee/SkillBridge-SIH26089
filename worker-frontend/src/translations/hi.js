@@ -209,7 +209,7 @@ export const hi = {
     customerLocation: 'ग्राहक का सेवा स्थान',
     distanceFromWorker: 'आपके स्थान से {distance} कि.मी. दूर',
     estimatedTravelTime: 'लगभग {time} मिनट यात्रा समय',
-    liveLocationActive: 'लाइव लोकेशन शेयरिंग सक्रिय है — ग्राहक आगमन को ट्रैक कर सकते हैं।',
+    liveLocationActive: 'लाइव लोकेशन शेयरिंग सक्रिय है, ग्राहक आगमन को ट्रैक कर सकते हैं।',
     openNavigation: 'नेविगेशन खोलें (गूगल मैप्स)',
     withinCoverage: 'आपके {radius} कि.मी. सेवा दायरे के भीतर',
     routeOverview: 'दूरी और मार्ग का विवरण',
@@ -242,6 +242,11 @@ export const hi = {
     bookingAlerts: 'बुकिंग',
     payoutAlerts: 'भुगतान',
     systemAlerts: 'सिस्टम',
+
+    viewRequest: 'अनुरोध देखें',
+    openRequest: 'अनुरोध खोलें',
+    viewAll: 'सभी सूचनाएं देखें',
+
     emptyTitle: 'कोई सूचना नहीं है',
     emptyDesc: 'आपके पास अभी कोई नई सूचना नहीं है।',
     unreadBadge: 'नया',

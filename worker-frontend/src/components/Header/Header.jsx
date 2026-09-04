@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+
 import {
   Wrench,
   Bell,
   User,
   Menu,
   X,
+  Briefcase,
   ChevronDown,
   ArrowRight,
   Clock,
@@ -13,6 +15,8 @@ import {
   Settings,
   CalendarCheck,
   LogOut,
+  Check,
+  XCircle,
 } from 'lucide-react';
 
 import ThemeToggle from '../ThemeToggle/ThemeToggle';
@@ -22,7 +26,15 @@ import ToggleSwitch from '../Common/ToggleSwitch';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 
-export default function Header({ onToggleSidebar, isSidebarOpen }) {
+import {
+  notificationsGateway,
+  bookingsGateway,
+} from '../../services/integrations';
+
+export default function Header({
+  onToggleSidebar,
+  isSidebarOpen,
+}) {
   const {
     isAvailable,
     toggleAvailability,
@@ -42,19 +54,96 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
+  const [notifications, setNotifications] = useState([]);
+  const [isLoadingNotifications, setIsLoadingNotifications] =
+    useState(false);
+
+  const [processingBookingId, setProcessingBookingId] =
+    useState(null);
+
   const notifRef = useRef(null);
   const profileRef = useRef(null);
 
-  /*
-   * Notifications will be supplied by the backend team.
-   * Keep this empty for now rather than creating fake notifications.
+  /**
+   * Fetch worker notifications.
+   *
+   * The same notification data is also used by
+   * the full Notifications page.
    */
-  const notifications = [];
+  const fetchNotifications = async () => {
+    if (!isAuthenticated) {
+      setNotifications([]);
+      return;
+    }
 
-  const unreadNotificationsCount = notifications.filter(
-    (notification) => notification.unread
-  ).length;
+    try {
+      setIsLoadingNotifications(true);
 
+      const data =
+        await notificationsGateway.getNotifications();
+
+      setNotifications(data);
+    } catch (err) {
+      console.error(
+        'Failed to load header notifications:',
+        err
+      );
+    } finally {
+      setIsLoadingNotifications(false);
+    }
+  };
+
+  /**
+   * Initial notification fetch + polling.
+   *
+   * The polling can later be replaced by a Firebase
+   * realtime listener without changing the UI.
+   */
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setNotifications([]);
+      return undefined;
+    }
+  
+    fetchNotifications();
+  
+    /**
+     * Refresh immediately when a booking is
+     * accepted or rejected from another part
+     * of the Worker app.
+     */
+    const handleNotificationsUpdated = () => {
+      fetchNotifications();
+    };
+  
+    window.addEventListener(
+      'skillbridge:notifications-updated',
+      handleNotificationsUpdated
+    );
+  
+    /**
+     * Keep polling as a temporary fallback.
+     *
+     * This can later be replaced with a
+     * Firebase realtime listener.
+     */
+    const interval = setInterval(() => {
+      fetchNotifications();
+    }, 5000);
+  
+    return () => {
+      window.removeEventListener(
+        'skillbridge:notifications-updated',
+        handleNotificationsUpdated
+      );
+    
+      clearInterval(interval);
+    };
+  }, [isAuthenticated]);
+
+  /**
+   * Close dropdowns when clicking outside.
+   */
   useEffect(() => {
     function handleOutsideClick(event) {
       if (
@@ -72,13 +161,22 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
       }
     }
 
-    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener(
+      'mousedown',
+      handleOutsideClick
+    );
 
     return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener(
+        'mousedown',
+        handleOutsideClick
+      );
     };
   }, []);
 
+  /**
+   * Close dropdowns when route changes.
+   */
   useEffect(() => {
     setIsNotifOpen(false);
     setIsProfileOpen(false);
@@ -94,11 +192,160 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
     setIsProfileOpen((current) => !current);
   }
 
-  function markAllNotificationsRead() {
-    /*
-     * Backend integration will handle the real read state.
-     * This function is intentionally ready for that integration.
-     */
+  /**
+   * Mark all notifications as read.
+   */
+  async function markAllNotificationsRead() {
+    try {
+      await notificationsGateway.markAllAsRead();
+
+      setNotifications((prev) =>
+        prev.map((notification) => ({
+          ...notification,
+          isRead: true,
+        }))
+      );
+    } catch (err) {
+      console.error(
+        'Failed to mark notifications as read:',
+        err
+      );
+    }
+  }
+
+  /**
+   * Open a notification's booking details page.
+   *
+   * The notification is marked as read first.
+   */
+  async function openNotification(notification) {
+    try {
+      if (!notification.isRead) {
+        await notificationsGateway.markAsRead(
+          notification.id
+        );
+
+        setNotifications((prev) =>
+          prev.map((item) =>
+            item.id === notification.id
+              ? { ...item, isRead: true }
+              : item
+          )
+        );
+      }
+
+      if (
+        notification.bookingId
+      ) {
+        setIsNotifOpen(false);
+
+        navigate(
+          `/booking/${notification.bookingId}`
+        );
+      }
+    } catch (err) {
+      console.error(
+        'Failed to open notification:',
+        err
+      );
+    }
+  }
+
+  /**
+   * Accept a booking directly from the notification dropdown.
+   */
+  async function acceptBooking(
+    event,
+    notification
+  ) {
+    event.stopPropagation();
+  
+    if (
+      !notification.bookingId ||
+      processingBookingId
+    ) {
+      return;
+    }
+  
+    try {
+      setProcessingBookingId(
+        notification.bookingId
+      );
+    
+      // Move the job:
+      // Available Jobs → My Bookings
+      await bookingsGateway.acceptBooking(
+        notification.bookingId
+      );
+    
+      // Remove the notification from the gateway
+      await notificationsGateway.removeNotification(
+        notification.id
+      );
+    
+      // Remove the notification from the dropdown immediately
+      setNotifications((prev) =>
+        prev.filter(
+          (item) =>
+            item.id !== notification.id
+        )
+      );
+    } catch (err) {
+      console.error(
+        'Failed to accept booking:',
+        err
+      );
+    } finally {
+      setProcessingBookingId(null);
+    }
+  }
+
+  /**
+   * Reject a booking directly from the notification dropdown.
+   */
+  async function rejectBooking(
+    event,
+    notification
+  ) {
+    event.stopPropagation();
+
+    if (
+      !notification.bookingId ||
+      processingBookingId
+    ) {
+      return;
+    }
+
+    try {
+      setProcessingBookingId(
+        notification.bookingId
+      );
+
+      // Remove the job from Available Jobs
+      await bookingsGateway.rejectBooking(
+        notification.bookingId
+      );
+
+      // Remove the notification from the gateway
+      await notificationsGateway.removeNotification(
+        notification.id
+      );
+
+      // Remove the notification from the dropdown immediately
+      setNotifications((prev) =>
+        prev.filter(
+          (item) =>
+            item.id !== notification.id
+        )
+      );
+    } catch (err) {
+      console.error(
+        'Failed to reject booking:',
+        err
+      );
+    } finally {
+      setProcessingBookingId(null);
+    }
   }
 
   function goTo(path) {
@@ -107,11 +354,29 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
     navigate(path);
   }
 
-  const workerName = worker?.fullName || 'Worker';
+  const workerName =
+    worker?.fullName || 'Worker';
 
   const workerService = worker?.primaryService
-    ? t(`services.${worker.primaryService}`) || worker.primaryService
+    ? t(`services.${worker.primaryService}`) ||
+      worker.primaryService
     : 'Professional';
+
+  /**
+   * Only unread notifications contribute to the
+   * red badge on the bell.
+   */
+  const unreadNotificationsCount =
+    notifications.filter(
+      (notification) => !notification.isRead
+    ).length;
+
+  /**
+   * Show the newest four notifications in the
+   * compact dropdown.
+   */
+  const recentNotifications =
+    notifications.slice(0, 4);
 
   return (
     <header className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 transition-colors duration-200">
@@ -219,27 +484,29 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
                   >
                     <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
 
+                    {/* Red unread badge */}
                     {unreadNotificationsCount > 0 && (
-                      <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-red-500 text-white text-[9px] font-extrabold flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-sm">
+                        {unreadNotificationsCount > 99
+                          ? '99+'
+                          : unreadNotificationsCount}
                       </span>
                     )}
                   </button>
 
                   {isNotifOpen && (
-                    <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 py-3 z-50">
+                    <div className="absolute right-0 mt-2 w-80 sm:w-[390px] bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden z-50">
 
                       {/* Notification header */}
-                      <div className="flex items-center justify-between px-4 pb-2 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800">
 
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-sm text-slate-900 dark:text-white">
-                            Notifications
+                            {t('notifications.title')}
                           </span>
 
                           {unreadNotificationsCount > 0 && (
-                            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400">
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400">
                               {unreadNotificationsCount} new
                             </span>
                           )}
@@ -249,87 +516,259 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
                           <button
                             type="button"
                             onClick={markAllNotificationsRead}
-                            className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                            className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
                           >
-                            Mark all as read
+                            {t(
+                              'notifications.markAllRead'
+                            )}
                           </button>
                         )}
                       </div>
 
                       {/* Notification list */}
-                      <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
+                      <div className="max-h-[330px] overflow-y-auto">
 
-                        {notifications.length === 0 ? (
-                          <div className="py-8 px-4 text-center">
+                        {isLoadingNotifications ? (
+                          <div className="py-10 px-4 text-center">
+                            <div className="w-8 h-8 mx-auto border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+
+                            <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+                              {t('common.loading')}
+                            </p>
+                          </div>
+                        ) : recentNotifications.length === 0 ? (
+                          <div className="py-10 px-4 text-center">
 
                             <div className="w-11 h-11 mx-auto mb-3 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
                               <Bell className="w-5 h-5 text-slate-400 dark:text-slate-500" />
                             </div>
 
                             <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                              No new notifications
+                              {t(
+                                'notifications.emptyTitle'
+                              )}
                             </p>
 
                             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                              You're all caught up.
+                              {t(
+                                'notifications.emptyDesc'
+                              )}
                             </p>
-
                           </div>
                         ) : (
-                          notifications
-                            .slice(0, 4)
-                            .map((notification) => (
-                              <div
-                                key={notification.id}
-                                onClick={() => goTo('/notifications')}
-                                className={`p-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer ${
-                                  notification.unread
-                                    ? 'bg-blue-50/50 dark:bg-blue-950/20'
-                                    : ''
-                                }`}
-                              >
-                                <div className="flex items-start gap-2.5">
+                          recentNotifications.map(
+                            (notification) => {
+                              const isBookingRequest =
+                                notification.type ===
+                                'booking_request';
 
-                                  <div className="mt-0.5">
-                                    {notification.type === 'booking' ? (
-                                      <span className="p-1 rounded-lg bg-blue-100 dark:bg-blue-900 text-blue-600 block">
-                                        <Clock className="w-3.5 h-3.5" />
-                                      </span>
-                                    ) : (
-                                      <span className="p-1 rounded-lg bg-emerald-100 dark:bg-emerald-900 text-emerald-600 block">
-                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                      </span>
+                              const isProcessing =
+                                processingBookingId ===
+                                notification.bookingId;
+
+                              return (
+                                <div
+                                  key={
+                                    notification.id
+                                  }
+                                  className={`border-b border-slate-100 dark:border-slate-800/60 last:border-b-0 ${
+                                    !notification.isRead
+                                      ? 'bg-blue-50/40 dark:bg-blue-950/20'
+                                      : ''
+                                  }`}
+                                >
+                                  {/* Main notification */}
+                                  <div className="p-3.5">
+
+                                    <div className="flex items-start gap-3">
+
+                                      {/* Icon */}
+                                      <div
+                                        className={`mt-0.5 w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
+                                          isBookingRequest
+                                            ? 'bg-blue-50 dark:bg-blue-950/70 border-blue-100 dark:border-blue-900 text-blue-600 dark:text-blue-400'
+                                            : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'
+                                        }`}
+                                      >
+                                        {isBookingRequest ? (
+                                          <Briefcase
+                                            className="w-4 h-4"
+                                          />
+                                        ) : (
+                                          <Bell
+                                            className="w-4 h-4"
+                                          />
+                                        )}
+                                      </div>
+
+                                      {/* Clickable request details */}
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          openNotification(
+                                            notification
+                                          )
+                                        }
+                                        className="flex-1 min-w-0 text-left group cursor-pointer"
+                                      >
+                                        {isBookingRequest ? (
+                                          <>
+                                            {/* Customer name */}
+                                            <div className="flex items-center justify-between gap-2">
+                                              <p
+                                                className={`text-sm truncate ${
+                                                  !notification.isRead
+                                                    ? 'font-extrabold text-slate-900 dark:text-white'
+                                                    : 'font-bold text-slate-800 dark:text-slate-200'
+                                                } group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors`}
+                                              >
+                                                {notification.customerName ||
+                                                  notification.title ||
+                                                  'New Service Request'}
+                                              </p>
+
+                                              <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">
+                                                {notification.timestamp ||
+                                                  'Just now'}
+                                              </span>
+                                            </div>
+
+                                            {/* Job detail */}
+                                            <p className="mt-0.5 text-xs font-medium text-slate-600 dark:text-slate-400 line-clamp-1">
+                                              {notification.jobTitle ||
+                                                notification.message ||
+                                                'New service request'}
+                                            </p>
+
+                                            {/* Extra detail */}
+                                            {(notification.locationAddress ||
+                                              notification.customerName) && (
+                                              <p className="mt-1 text-[10px] text-slate-400 dark:text-slate-500 line-clamp-1">
+                                                {notification.locationAddress ||
+                                                  ''}
+                                              </p>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <>
+                                            <div className="flex items-center justify-between gap-2">
+                                              <p
+                                                className={`text-xs ${
+                                                  !notification.isRead
+                                                    ? 'font-extrabold text-slate-900 dark:text-white'
+                                                    : 'font-semibold text-slate-800 dark:text-slate-200'
+                                                }`}
+                                              >
+                                                {notification.title ||
+                                                  'Notification'}
+                                              </p>
+
+                                              <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">
+                                                {notification.timestamp ||
+                                                  'Just now'}
+                                              </span>
+                                            </div>
+
+                                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                                              {notification.message}
+                                            </p>
+                                          </>
+                                        )}
+                                      </button>
+
+                                      {/* Accept / Reject */}
+                                      {isBookingRequest &&
+                                        notification.bookingId && (
+                                          <div className="flex items-center gap-1.5 shrink-0">
+
+                                            {/* Accept */}
+                                            <button
+                                              type="button"
+                                              disabled={
+                                                isProcessing
+                                              }
+                                              onClick={(
+                                                event
+                                              ) =>
+                                                acceptBooking(
+                                                  event,
+                                                  notification
+                                                )
+                                              }
+                                              className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-950 hover:border-emerald-200 dark:hover:border-emerald-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                                              title={t(
+                                                'common.accept'
+                                              )}
+                                              aria-label={t(
+                                                'common.accept'
+                                              )}
+                                            >
+                                              <Check className="w-4 h-4" />
+                                            </button>
+
+                                            {/* Reject */}
+                                            <button
+                                              type="button"
+                                              disabled={
+                                                isProcessing
+                                              }
+                                              onClick={(
+                                                event
+                                              ) =>
+                                                rejectBooking(
+                                                  event,
+                                                  notification
+                                                )
+                                              }
+                                              className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900 hover:bg-rose-100 dark:hover:bg-rose-950 hover:border-rose-200 dark:hover:border-rose-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+                                              title={t(
+                                                'common.decline'
+                                              )}
+                                              aria-label={t(
+                                                'common.decline'
+                                              )}
+                                            >
+                                              <XCircle className="w-4 h-4" />
+                                            </button>
+
+                                          </div>
+                                        )}
+                                    </div>
+
+                                    {/* Unread indicator */}
+                                    {!notification.isRead && (
+                                      <div className="mt-2 ml-12 flex items-center gap-1.5">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+
+                                        <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                                          {t(
+                                            'notifications.unreadBadge'
+                                          )}
+                                        </span>
+                                      </div>
                                     )}
+
                                   </div>
-
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-xs font-semibold text-slate-900 dark:text-white">
-                                      {notification.title}
-                                    </p>
-
-                                    <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">
-                                      {notification.message}
-                                    </p>
-
-                                    <span className="text-[10px] text-slate-400 mt-1 block">
-                                      {notification.time}
-                                    </span>
-                                  </div>
-
                                 </div>
-                              </div>
-                            ))
+                              );
+                            }
+                          )
                         )}
                       </div>
 
                       {/* View all */}
-                      <div className="px-4 pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
+                      <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 text-center">
                         <button
                           type="button"
-                          onClick={() => goTo('/notifications')}
-                          className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center justify-center gap-1 mx-auto"
+                          onClick={() =>
+                            goTo('/notifications')
+                          }
+                          className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center justify-center gap-1 mx-auto"
                         >
-                          View all notifications
+                          {t(
+                            'notifications.viewAll'
+                          ) || 'View all notifications'}
+
                           <ArrowRight className="w-3 h-3" />
                         </button>
                       </div>
@@ -359,26 +798,27 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
                   >
                     <div className="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs border border-blue-200 dark:border-blue-900">
                       {worker?.fullName
-                        ? worker.fullName.charAt(0).toUpperCase()
+                        ? worker.fullName
+                            .charAt(0)
+                            .toUpperCase()
                         : 'W'}
                     </div>
 
                     <div className="hidden sm:flex flex-col text-left">
                       <span className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight">
-                        {worker?.fullName || 'Worker'}
+                        {workerName}
                       </span>
 
                       <span className="text-[10px] text-slate-400 capitalize">
-                        {worker?.primaryService
-                          ? t(`services.${worker.primaryService}`) ||
-                            worker.primaryService
-                          : 'Professional'}
+                        {workerService}
                       </span>
                     </div>
 
                     <ChevronDown
                       className={`hidden sm:block w-3.5 h-3.5 text-slate-400 transition-transform ${
-                        isProfileOpen ? 'rotate-180' : ''
+                        isProfileOpen
+                          ? 'rotate-180'
+                          : ''
                       }`}
                     />
                   </button>
@@ -394,17 +834,19 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
 
                           <div className="w-9 h-9 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-sm border border-blue-200 dark:border-blue-900 shrink-0">
                             {worker?.fullName
-                              ? worker.fullName.charAt(0).toUpperCase()
+                              ? worker.fullName
+                                  .charAt(0)
+                                  .toUpperCase()
                               : 'W'}
                           </div>
 
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                              {worker?.fullName || 'Worker'}
+                              {workerName}
                             </p>
 
                             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                              {worker?.primaryService || 'Professional'}
+                              {workerService}
                             </p>
                           </div>
 
@@ -416,7 +858,9 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
 
                         <button
                           type="button"
-                          onClick={() => goTo('/profile')}
+                          onClick={() =>
+                            goTo('/profile')
+                          }
                           className="w-full flex items-center gap-2.5 text-left px-4 py-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                         >
                           <User className="w-4 h-4 text-slate-400" />
@@ -425,7 +869,9 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
 
                         <button
                           type="button"
-                          onClick={() => goTo('/my-bookings')}
+                          onClick={() =>
+                            goTo('/my-bookings')
+                          }
                           className="w-full flex items-center gap-2.5 text-left px-4 py-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                         >
                           <CalendarCheck className="w-4 h-4 text-slate-400" />
@@ -434,7 +880,9 @@ export default function Header({ onToggleSidebar, isSidebarOpen }) {
 
                         <button
                           type="button"
-                          onClick={() => goTo('/settings')}
+                          onClick={() =>
+                            goTo('/settings')
+                          }
                           className="w-full flex items-center gap-2.5 text-left px-4 py-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                         >
                           <Settings className="w-4 h-4 text-slate-400" />

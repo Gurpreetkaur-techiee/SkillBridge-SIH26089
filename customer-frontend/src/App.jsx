@@ -2,6 +2,7 @@ import React from 'react';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
 import { AppProvider, useApp } from './context/AppContext';
+import { AuthProvider } from './context/AuthContext';
 import { MainLayout } from './components/layout/MainLayout';
 import { CustomerHome } from './views/CustomerHome';
 import { FindWorkersView } from './views/FindWorkersView';
@@ -9,6 +10,7 @@ import { MyBookingsView } from './views/MyBookingsView';
 import { NotificationsView } from './views/NotificationsView';
 import { ProfileView } from './views/ProfileView';
 import { ServiceDetailModal } from './components/customer/ServiceDetailModal';
+import { AuthModal } from './components/auth/AuthModal';
 
 function AppContent() {
   const { activeTab } = useApp();
@@ -34,6 +36,7 @@ function AppContent() {
     <MainLayout>
       {renderActiveView()}
       <ServiceDetailModal />
+      <AuthModal />
     </MainLayout>
   );
 }
@@ -42,9 +45,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <LanguageProvider>
-        <AppProvider>
-          <AppContent />
-        </AppProvider>
+        <AuthProvider>
+          <AppProvider>
+            <AppContent />
+          </AppProvider>
+        </AuthProvider>
       </LanguageProvider>
     </ThemeProvider>
   );
