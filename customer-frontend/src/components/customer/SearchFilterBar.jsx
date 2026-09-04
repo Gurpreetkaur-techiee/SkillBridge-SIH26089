@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, MapPin, SlidersHorizontal, X } from 'lucide-react';
+import { analyzeService } from '../../services/serviceAnalyzer';
 import { useLanguage } from '../../context/LanguageContext';
 import { useApp } from '../../context/AppContext';
 import { Button } from '../ui/Button';
@@ -12,15 +13,25 @@ export function SearchFilterBar() {
     userLocation, 
     setActiveTab, 
     detectLocation, 
-    isLocating 
+    isLocating ,
+    setDetectedService,
+    setServiceConfidence
   } = useApp();
 
   const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      setActiveTab('workers');
-    }
-  };
+  e.preventDefault();
+
+  if (searchQuery.trim()) {
+    const result = analyzeService(searchQuery);
+
+    setDetectedService(result.service);
+    setServiceConfidence(result.confidence);
+
+    console.log('Service Analyzer Result:', result);
+
+    setActiveTab('workers');
+  }
+};
 
   return (
     <form 

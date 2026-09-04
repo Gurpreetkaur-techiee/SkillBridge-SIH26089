@@ -1,13 +1,15 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext,useEffect, useState } from 'react';
 import { sampleWorkers, sampleCustomerBookings, sampleNotifications } from '../data/workersData';
-
+import { addDoc, collection,getDocs, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 const AppContext = createContext();
 
 export function AppProvider({ children }) {
   const [activeTab, setActiveTab] = useState('home'); // 'home' | 'workers' | 'bookings' | 'notifications' | 'profile'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  
+  const [detectedService, setDetectedService] = useState('unknown');
+const [serviceConfidence, setServiceConfidence] = useState(0);
   // Location state
   const [userLocation, setUserLocation] = useState('Downtown Metro Area');
   const [isLocating, setIsLocating] = useState(false);
@@ -18,6 +20,26 @@ export function AppProvider({ children }) {
   const [selectedService, setSelectedService] = useState(null);
   const [selectedWorker, setSelectedWorker] = useState(null);
   const [bookings, setBookings] = useState(sampleCustomerBookings);
+  useEffect(() => {
+  const loadBookings = async () => {
+    try {
+      const snapshot = await getDocs(collection(db, "bookings"));
+
+      const firebaseBookings = snapshot.docs.map(doc => ({
+        firebaseId: doc.id,
+        ...doc.data()
+      }));
+
+      if (firebaseBookings.length > 0) {
+        setBookings(firebaseBookings);
+      }
+    } catch (error) {
+      console.error("Error loading bookings from Firebase:", error);
+    }
+  };
+
+  loadBookings();
+}, []);
   const [notifications, setNotifications] = useState(sampleNotifications);
 
   // User Profile
@@ -71,37 +93,63 @@ export function AppProvider({ children }) {
     setNotifications(prev => prev.map(n => ({ ...n, unread: false })));
   };
 
-  const createBooking = (service, worker, notes = '') => {
-    const newBooking = {
-      id: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
-      serviceName: service.title,
-      category: service.category,
-      workerName: worker ? worker.name : "Assigned Pro (Dispatching)",
-      workerAvatar: worker ? worker.avatar : "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150",
-      date: "Scheduled for Today",
-      status: "in_progress",
-      statusLabel: "Pro Dispatched",
-      amount: `$${service.price}.00`,
-      address: userProfile.address,
-      eta: "15-30 mins"
+const createBooking = async (service, worker, notes = '') => {
+  const newBooking = {
+    id: BK-${Math.floor(1000 + Math.random() * 9000)},
+    serviceName: service.title,
+    category: service.category,
+    workerName: worker ? worker.name : "Assigned Pro (Dispatching)",
+    workerAvatar: worker
+      ? worker.avatar
+      : "https://images.unsplash.com/photo-1534528741775-53994a69daeb",
+    date: "Scheduled for Today",
+    status: "in_progress",
+    statusLabel: "Pro Dispatched",
+    amount: $${service.price}.00,
+    address: userProfile.address,
+    eta: "15-30 mins",
+    notes: notes
+  };
+
+  try {
+    // Save booking to Firebase Firestore
+    const docRef = await addDoc(collection(db, "bookings"), {
+      ...newBooking,
+      createdAt: serverTimestamp()
+    });
+
+    // Add Firebase document ID
+    const firebaseBooking = {
+      ...newBooking,
+      firebaseId: docRef.id
     };
 
-    setBookings(prev => [newBooking, ...prev]);
-    
+    // Update My Bookings immediately
+    setBookings(prev => [firebaseBooking, ...prev]);
+
     // Add notification
     const newNotif = {
-      id: `notif-${Date.now()}`,
-      title: `Booking Confirmed: ${service.title}! 🎉`,
-      message: `Your booking #${newBooking.id} has been received. A pro is being dispatched to ${userProfile.address}.`,
+      id: notif-${Date.now()},
+      title: Booking Confirmed: ${service.title}! 🎉,
+      message: Your booking #${newBooking.id} has been received. A pro is being dispatched to ${userProfile.address}.,
       time: "Just now",
       unread: true,
       type: "booking"
     };
+
     setNotifications(prev => [newNotif, ...prev]);
 
-    return newBooking;
-  };
+    return firebaseBooking;
 
+  } catch (error) {
+    console.error("Error creating booking:", error);
+
+    // Still show booking locally if Firebase fails
+    setBookings(prev => [newBooking, ...prev]);
+
+    return newBooking;
+  }
+};
   return (
     <AppContext.Provider
       value={{
@@ -111,6 +159,10 @@ export function AppProvider({ children }) {
         setSearchQuery,
         selectedCategory,
         setSelectedCategory,
+        detectedService,
+        setDetectedService,
+        serviceConfidence,
+        setServiceConfidence,
         userLocation,
         setUserLocation,
         isLocating,

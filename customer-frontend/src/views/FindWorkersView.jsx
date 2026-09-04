@@ -16,7 +16,7 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 
 export function FindWorkersView() {
-  const { searchQuery, setSearchQuery, setSelectedService, setSelectedWorker } = useApp();
+  const { searchQuery, setSearchQuery, setSelectedService, setSelectedWorker, detectedService, serviceConfidence } = useApp();
   const { t } = useLanguage();
 
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
@@ -24,13 +24,30 @@ export function FindWorkersView() {
   const [maxPrice, setMaxPrice] = useState(60);
 
   const categories = ['All', 'Home Repair', 'Cleaning', 'Automotive', 'Appliances'];
-
+  const serviceMatches = {
+  electrician: ["electrician", "electric", "electrical"],
+  plumber: ["plumber", "plumbing"],
+  cleaner: ["cleaner", "cleaning"],
+  mechanic: ["mechanic", "automotive", "auto"],
+  carpenter: ["carpenter", "carpentry"],
+  painter: ["painter", "painting"]
+};
   const filteredWorkers = sampleWorkers.filter((worker) => {
-    const matchesSearch = 
-      !searchQuery.trim() || 
-      worker.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      worker.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      worker.skills.some(s => s.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch =
+  !searchQuery.trim() ||
+  worker.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  worker.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+  worker.skills.some(s =>
+    s.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+const keywords = serviceMatches[detectedService] || [];
+
+const matchesDetectedService =
+  detectedService === "unknown" ||
+  keywords.some(keyword =>
+    worker.role.toLowerCase().includes(keyword)
+  );
 
     const matchesCategory = 
       selectedCategoryFilter === 'All' || 
@@ -112,7 +129,18 @@ export function FindWorkersView() {
           ))}
         </div>
       </div>
+{detectedService !== "unknown" && (
+  <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900">
+    <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+      Detected Service:{" "}
+      <span className="capitalize">{detectedService}</span>
+    </p>
 
+    <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+      Confidence: {Math.round(serviceConfidence * 100)}%
+    </p>
+  </div>
+)}
       {/* Workers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {filteredWorkers.length === 0 ? (
