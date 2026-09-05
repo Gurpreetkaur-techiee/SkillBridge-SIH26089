@@ -141,7 +141,7 @@ export function TopWorkersSection() {
               <div>
                 <span className="text-[10px] text-slate-400 block -mb-0.5">Rate</span>
                 <span className="text-base font-extrabold text-slate-900 dark:text-white">
-                  ${worker.hourlyRate}
+                  ₹{worker.hourlyRate}
                   <span className="text-xs font-normal text-slate-500">/hr</span>
                 </span>
               </div>

@@ -63,7 +63,7 @@ export function ServiceDetailModal() {
       ...booking,
       transactionId: receipt?.transactionId || `TXN-${Math.floor(100000 + Math.random() * 900000)}`,
       paymentMethod: receipt?.paymentMethod || 'Credit/Debit Card',
-      totalPaid: receipt?.totalPaid || `$${selectedService.price + 2.50}`
+      totalPaid: receipt?.totalPaid || `₹${selectedService.price + 2.50}`
     });
 
     setIsSuccess(true);
@@ -141,7 +141,7 @@ export function ServiceDetailModal() {
             <div>
               <span className="text-xs text-slate-500 dark:text-slate-400">Standard Price</span>
               <p className="text-xl font-extrabold text-blue-600 dark:text-blue-400">
-                ${selectedService.price}
+                ₹{selectedService.price}
                 <span className="text-xs font-normal text-slate-500"> {selectedService.unit || '/hr'}</span>
               </p>
             </div>
@@ -239,7 +239,7 @@ export function ServiceDetailModal() {
               amount={selectedService.price}
               serviceName={selectedTask || selectedService.title}
               onSuccess={handlePaymentSuccess}
-              buttonText={`Proceed to Pay • $${selectedService.price}`}
+              buttonText={`Proceed to Pay • ₹${selectedService.price}`}
               className="px-6"
             />
           </div>

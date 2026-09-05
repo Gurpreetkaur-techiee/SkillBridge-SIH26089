@@ -143,7 +143,7 @@ export function PopularServices() {
                       {t('startingFrom')}
                     </span>
                     <span className="font-extrabold text-sm text-blue-600 dark:text-blue-400">
-                      ${service.price}
+                      ₹{service.price}
                       <span className="text-[11px] font-normal text-slate-500">{service.unit}</span>
                     </span>
                   </div>

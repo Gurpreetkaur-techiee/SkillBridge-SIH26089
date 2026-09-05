@@ -91,7 +91,7 @@ export const sampleCustomerBookings = [
     date: "Today, 3:30 PM",
     status: "in_progress",
     statusLabel: "Worker En Route",
-    amount: "$45.00",
+    amount: "₹45.00",
     address: "742 Evergreen Terrace, Apt 4B",
     eta: "12 mins away"
   },
@@ -104,7 +104,7 @@ export const sampleCustomerBookings = [
     date: "Yesterday, 11:00 AM",
     status: "completed",
     statusLabel: "Completed",
-    amount: "$55.00",
+  amount: "₹55.00",
     address: "742 Evergreen Terrace, Apt 4B",
     ratingGiven: 5
   }

@@ -70,7 +70,7 @@ export function FindWorkersView() {
             category: data.category || 'Home Repair',
             rating: Number(data.rating) || 0,
             reviewsCount: Number(data.reviewsCount) || 0,
-            hourlyRate: Number(data.hourlyRate ?? data.price) || 0,
+            hourlyRate: Number(data.hourlyRate ?? data.price) || 300,
             distanceKm: Number(data.distanceKm) || 0,
             distanceText:
               data.distanceText ||
@@ -339,7 +339,7 @@ export function FindWorkersView() {
                         </div>
 
                         <span className="text-sm font-extrabold text-blue-600 dark:text-blue-400">
-                          ${worker.hourlyRate}/hr
+                          ₹{worker.hourlyRate}/hr
                         </span>
                       </div>
 
@@ -357,7 +357,7 @@ export function FindWorkersView() {
                           ({worker.reviewsCount} reviews)
                         </span>
 
-                        <span className="text-slate-400">
+                        <span className="text-slate-400">cd worker-fronte
                           •
                         </span>
 
