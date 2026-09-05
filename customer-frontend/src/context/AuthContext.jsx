@@ -1,14 +1,20 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut, 
-  signInWithPopup, 
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  signInWithPopup,
   updateProfile,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
 } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
+import { auth, googleProvider, db } from '../firebase';
 
 const AuthContext = createContext();
 
@@ -17,9 +23,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState('login'); // 'login' | 'signup'
+  const [authModalMode, setAuthModalMode] = useState('login');
 
-  // Open & close auth modal helpers
   const openAuthModal = (mode = 'login') => {
     setAuthModalMode(mode);
     setAuthError(null);
@@ -31,179 +36,224 @@ export function AuthProvider({ children }) {
     setAuthError(null);
   };
 
-  // Firebase auth state listener
+  // Create/update customer document in Firestore
+  const createUserDocument = async (user, displayName = '') => {
+    if (!user) return;
+
+    const userRef = doc(db, 'users', user.uid);
+    const userSnapshot = await getDoc(userRef);
+
+    const name =
+      displayName.trim() ||
+      user.displayName ||
+      user.email?.split('@')[0] ||
+      'Customer';
+
+    if (!userSnapshot.exists()) {
+      await setDoc(userRef, {
+        uid: user.uid,
+        name,
+        email: user.email || '',
+        role: 'customer',
+        photoURL: user.photoURL || null,
+        emailVerified: user.emailVerified,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      await setDoc(
+        userRef,
+        {
+          name,
+          email: user.email || '',
+          photoURL: user.photoURL || null,
+          emailVerified: user.emailVerified,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+  };
+
+  // Listen for Firebase authentication state
   useEffect(() => {
-    try {
-      const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      try {
         if (user) {
+          await createUserDocument(user);
+
           setCurrentUser({
             uid: user.uid,
             email: user.email,
-            displayName: user.displayName || user.email?.split('@')[0] || 'Customer Pro',
-            photoURL: user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250',
+            displayName:
+              user.displayName ||
+              user.email?.split('@')[0] ||
+              'Customer',
+            photoURL: user.photoURL || null,
             emailVerified: user.emailVerified,
-            isAnonymous: user.isAnonymous
+            isAnonymous: user.isAnonymous,
           });
         } else {
-          // Check if there is a local demo user session
-          const savedDemoUser = localStorage.getItem('skillbridge_demo_user');
-          if (savedDemoUser) {
-            setCurrentUser(JSON.parse(savedDemoUser));
-          } else {
-            setCurrentUser(null);
-          }
+          setCurrentUser(null);
         }
+      } catch (error) {
+        console.error('Error syncing user with Firestore:', error);
+      } finally {
         setLoading(false);
-      });
-
-      return unsubscribe;
-    } catch (err) {
-      console.warn("Firebase Auth listener initialization notice:", err.message);
-      // Fallback: check demo user in localStorage
-      const savedDemoUser = localStorage.getItem('skillbridge_demo_user');
-      if (savedDemoUser) {
-        setCurrentUser(JSON.parse(savedDemoUser));
       }
-      setLoading(false);
-    }
+    });
+
+    return unsubscribe;
   }, []);
 
-  // Sign up with Email and Password
+  // Create Firebase account + Firestore user document
   const signup = async (email, password, displayName = '') => {
     setAuthError(null);
+
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      if (displayName) {
-        await updateProfile(userCredential.user, {
-          displayName,
-          photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(displayName)}`
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+      const user = userCredential.user;
+
+      if (displayName.trim()) {
+        await updateProfile(user, {
+          displayName: displayName.trim(),
         });
       }
+
+      await createUserDocument(user, displayName);
+
       setCurrentUser({
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        displayName: displayName || email.split('@')[0],
-        photoURL: userCredential.user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(email)}`
+        uid: user.uid,
+        email: user.email,
+        displayName:
+          displayName.trim() ||
+          user.email?.split('@')[0] ||
+          'Customer',
+        photoURL: user.photoURL || null,
+        emailVerified: user.emailVerified,
+        isAnonymous: user.isAnonymous,
       });
-      localStorage.removeItem('skillbridge_demo_user');
+
       closeAuthModal();
-      return userCredential.user;
+
+      return user;
     } catch (error) {
-      // If Firebase project credentials are not configured or request fails, support graceful fallback for local development
-      if (error.code === 'auth/api-key-not-valid' || error.code === 'auth/invalid-api-key' || error.message.includes('API key')) {
-        const mockUser = {
-          uid: `user_${Date.now()}`,
-          email,
-          displayName: displayName || email.split('@')[0],
-          photoURL: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(displayName || email)}`
-        };
-        setCurrentUser(mockUser);
-        localStorage.setItem('skillbridge_demo_user', JSON.stringify(mockUser));
-        closeAuthModal();
-        return mockUser;
-      }
-      setAuthError(getFriendlyErrorMessage(error.code || error.message));
+      console.error('Signup error:', error);
+
+      const friendlyMessage = getFriendlyErrorMessage(error.code);
+      setAuthError(friendlyMessage);
+
       throw error;
     }
   };
 
-  // Log in with Email and Password
+  // Login with Firebase email/password
   const login = async (email, password) => {
     setAuthError(null);
+
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+
+      const user = userCredential.user;
+
+      await createUserDocument(user);
+
       setCurrentUser({
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-        displayName: userCredential.user.displayName || email.split('@')[0],
-        photoURL: userCredential.user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250'
+        uid: user.uid,
+        email: user.email,
+        displayName:
+          user.displayName ||
+          user.email?.split('@')[0] ||
+          'Customer',
+        photoURL: user.photoURL || null,
+        emailVerified: user.emailVerified,
+        isAnonymous: user.isAnonymous,
       });
-      localStorage.removeItem('skillbridge_demo_user');
+
       closeAuthModal();
-      return userCredential.user;
+
+      return user;
     } catch (error) {
-      if (error.code === 'auth/api-key-not-valid' || error.code === 'auth/invalid-api-key' || error.message.includes('API key')) {
-        const mockUser = {
-          uid: `user_${Date.now()}`,
-          email,
-          displayName: email.split('@')[0],
-          photoURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250'
-        };
-        setCurrentUser(mockUser);
-        localStorage.setItem('skillbridge_demo_user', JSON.stringify(mockUser));
-        closeAuthModal();
-        return mockUser;
-      }
-      setAuthError(getFriendlyErrorMessage(error.code || error.message));
+      console.error('Login error:', error);
+
+      const friendlyMessage = getFriendlyErrorMessage(error.code);
+      setAuthError(friendlyMessage);
+
       throw error;
     }
   };
 
-  // Google Sign In
+  // Login with Google + Firestore user document
   const loginWithGoogle = async () => {
     setAuthError(null);
+
     try {
       const result = await signInWithPopup(auth, googleProvider);
+
+      const user = result.user;
+
+      await createUserDocument(user);
+
       setCurrentUser({
-        uid: result.user.uid,
-        email: result.user.email,
-        displayName: result.user.displayName || result.user.email.split('@')[0],
-        photoURL: result.user.photoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250'
+        uid: user.uid,
+        email: user.email,
+        displayName:
+          user.displayName ||
+          user.email?.split('@')[0] ||
+          'Customer',
+        photoURL: user.photoURL || null,
+        emailVerified: user.emailVerified,
+        isAnonymous: user.isAnonymous,
       });
-      localStorage.removeItem('skillbridge_demo_user');
+
       closeAuthModal();
-      return result.user;
+
+      return user;
     } catch (error) {
-      if (error.code === 'auth/api-key-not-valid' || error.code === 'auth/invalid-api-key' || error.message.includes('API key')) {
-        const mockUser = {
-          uid: `google_user_${Date.now()}`,
-          email: "alex.customer@gmail.com",
-          displayName: "Alex Morgan",
-          photoURL: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250"
-        };
-        setCurrentUser(mockUser);
-        localStorage.setItem('skillbridge_demo_user', JSON.stringify(mockUser));
-        closeAuthModal();
-        return mockUser;
-      }
-      setAuthError(getFriendlyErrorMessage(error.code || error.message));
+      console.error('Google login error:', error);
+
+      const friendlyMessage = getFriendlyErrorMessage(error.code);
+      setAuthError(friendlyMessage);
+
       throw error;
     }
   };
 
-  // Sign Out
+  // Logout
   const logout = async () => {
+    setAuthError(null);
+
     try {
       await signOut(auth);
-    } catch (e) {
-      console.warn("SignOut notice:", e.message);
+      setCurrentUser(null);
+    } catch (error) {
+      setAuthError(getFriendlyErrorMessage(error.code));
+      throw error;
     }
-    localStorage.removeItem('skillbridge_demo_user');
-    setCurrentUser(null);
   };
 
-  // Password Reset
+  // Password reset
   const resetPassword = async (email) => {
     setAuthError(null);
+
     try {
       await sendPasswordResetEmail(auth, email);
     } catch (error) {
-      setAuthError(getFriendlyErrorMessage(error.code || error.message));
+      const friendlyMessage = getFriendlyErrorMessage(error.code);
+
+      setAuthError(friendlyMessage);
+
       throw error;
     }
-  };
-
-  // Demo Login Helper for instant testing
-  const loginAsDemoCustomer = () => {
-    const demoUser = {
-      uid: "demo-customer-101",
-      email: "alex.morgan@example.com",
-      displayName: "Alex Morgan",
-      photoURL: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250"
-    };
-    setCurrentUser(demoUser);
-    localStorage.setItem('skillbridge_demo_user', JSON.stringify(demoUser));
-    closeAuthModal();
   };
 
   const getFriendlyErrorMessage = (code) => {
@@ -212,16 +262,35 @@ export function AuthProvider({ children }) {
       case 'auth/wrong-password':
       case 'auth/invalid-credential':
         return 'Invalid email or password. Please check and try again.';
+
       case 'auth/email-already-in-use':
         return 'An account with this email address already exists.';
+
       case 'auth/weak-password':
         return 'Password is too weak. Please use at least 6 characters.';
+
       case 'auth/invalid-email':
         return 'Please enter a valid email address.';
+
+      case 'auth/operation-not-allowed':
+        return 'Email/password authentication is not enabled in Firebase.';
+
       case 'auth/popup-closed-by-user':
-        return 'Google sign-in popup was closed before completing.';
+        return 'Google sign-in was cancelled.';
+
+      case 'auth/popup-blocked':
+        return 'The Google sign-in popup was blocked by the browser.';
+
       case 'auth/network-request-failed':
         return 'Network connection error. Please check your internet connection.';
+
+      case 'auth/too-many-requests':
+        return 'Too many attempts. Please wait a moment and try again.';
+
+      case 'auth/api-key-not-valid':
+      case 'auth/invalid-api-key':
+        return 'Firebase configuration is invalid. Please check the environment settings.';
+
       default:
         return 'Authentication failed. Please try again.';
     }
@@ -243,7 +312,6 @@ export function AuthProvider({ children }) {
         logout,
         loginWithGoogle,
         resetPassword,
-        loginAsDemoCustomer
       }}
     >
       {children}
@@ -253,8 +321,10 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
+
   return context;
 }

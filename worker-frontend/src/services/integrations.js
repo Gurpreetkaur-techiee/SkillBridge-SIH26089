@@ -22,9 +22,7 @@ import {
   collection,
   query,
   where,
-  orderBy,
   serverTimestamp,
-  Timestamp,
 } from 'firebase/firestore';
 
 import { auth, db } from '../firebase';
@@ -693,22 +691,22 @@ export const bookingsGateway = {
           )
         );
 
-      const booking =
-        {
-          ...bookingData,
+      const booking = {
 
-          status:
-            'open',
+        ...bookingData,
 
-          workerId:
-            null,
+        status:
+          'open',
 
-          createdAt:
-            serverTimestamp(),
+        workerId:
+          null,
 
-          updatedAt:
-            serverTimestamp(),
-        };
+        createdAt:
+          serverTimestamp(),
+
+        updatedAt:
+          serverTimestamp(),
+      };
 
 
       await setDoc(
@@ -1024,20 +1022,21 @@ export const bookingsGateway = {
       }
 
 
-      const updateData =
-        {
-          status:
-            newStatus,
+      const updateData = {
 
-          updatedAt:
-            serverTimestamp(),
-        };
+        status:
+          newStatus,
+
+        updatedAt:
+          serverTimestamp(),
+      };
 
 
       if (
         newStatus ===
         'in_progress'
       ) {
+
         updateData.startedAt =
           serverTimestamp();
       }
@@ -1130,30 +1129,306 @@ export const bookingsGateway = {
 
 // =================================================
 // NOTIFICATIONS GATEWAY
+// FIRESTORE
 // =================================================
 
 export const notificationsGateway = {
 
+
+  /**
+   * Get logged-in worker notifications
+   */
   async getNotifications() {
-    return [];
+
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'Please login first.'
+      );
+    }
+
+    try {
+
+      const notificationsRef =
+        collection(
+          db,
+          'notifications'
+        );
+
+      const q =
+        query(
+          notificationsRef,
+          where(
+            'workerId',
+            '==',
+            user.uid
+          )
+        );
+
+      const snapshot =
+        await getDocs(q);
+
+
+      const notifications =
+        snapshot.docs.map(
+          (document) => {
+
+            const data =
+              document.data();
+
+            return {
+              id:
+                document.id,
+
+              ...data,
+
+              timestamp:
+                data.createdAt?.toDate
+                  ? data.createdAt
+                      .toDate()
+                      .toLocaleString()
+                  : data.timestamp ||
+                    'Just now',
+            };
+          }
+        );
+
+
+      // Newest notifications first
+      notifications.sort(
+        (a, b) => {
+
+          const aTime =
+            a.createdAt?.toMillis
+              ? a.createdAt.toMillis()
+              : 0;
+
+          const bTime =
+            b.createdAt?.toMillis
+              ? b.createdAt.toMillis()
+              : 0;
+
+          return bTime - aTime;
+        }
+      );
+
+
+      return notifications;
+
+    } catch (error) {
+
+      console.error(
+        'Get notifications error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to load notifications.'
+      );
+    }
   },
 
-  async addNotification() {
-    return {
-      success: true,
-    };
+
+  /**
+   * Add notification
+   */
+  async addNotification(
+    notificationData
+  ) {
+
+    try {
+
+      const notificationRef =
+        doc(
+          collection(
+            db,
+            'notifications'
+          )
+        );
+
+
+      const notification = {
+
+        ...notificationData,
+
+        isRead:
+          false,
+
+        createdAt:
+          serverTimestamp(),
+
+        updatedAt:
+          serverTimestamp(),
+      };
+
+
+      await setDoc(
+        notificationRef,
+        notification
+      );
+
+
+      return {
+        success: true,
+
+        notification: {
+
+          id:
+            notificationRef.id,
+
+          ...notification,
+        },
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Add notification error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to create notification.'
+      );
+    }
   },
 
-  async markAsRead() {
-    return {
-      success: true,
-    };
+
+  /**
+   * Mark one notification as read
+   */
+  async markAsRead(
+    notificationId
+  ) {
+
+    if (!notificationId) {
+      throw new Error(
+        'Notification ID is required.'
+      );
+    }
+
+    try {
+
+      const notificationRef =
+        doc(
+          db,
+          'notifications',
+          notificationId
+        );
+
+
+      await updateDoc(
+        notificationRef,
+        {
+          isRead:
+            true,
+
+          updatedAt:
+            serverTimestamp(),
+        }
+      );
+
+
+      return {
+        success: true,
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Mark notification as read error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to mark notification as read.'
+      );
+    }
   },
 
+
+  /**
+   * Mark all notifications as read
+   */
   async markAllAsRead() {
-    return {
-      success: true,
-    };
+
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'Please login first.'
+      );
+    }
+
+    try {
+
+      const notificationsRef =
+        collection(
+          db,
+          'notifications'
+        );
+
+
+      const q =
+        query(
+          notificationsRef,
+          where(
+            'workerId',
+            '==',
+            user.uid
+          ),
+          where(
+            'isRead',
+            '==',
+            false
+          )
+        );
+
+
+      const snapshot =
+        await getDocs(q);
+
+
+      for (
+        const notificationDoc
+        of snapshot.docs
+      ) {
+
+        await updateDoc(
+          notificationDoc.ref,
+          {
+            isRead:
+              true,
+
+            updatedAt:
+              serverTimestamp(),
+          }
+        );
+      }
+
+
+      return {
+        success: true,
+      };
+
+    } catch (error) {
+
+      console.error(
+        'Mark all notifications as read error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to mark all notifications as read.'
+      );
+    }
   },
 };
 
@@ -1178,6 +1453,7 @@ export const earningsGateway = {
 
 
   async getTransactions() {
+
     return [];
   },
 };
