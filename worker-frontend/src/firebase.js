@@ -12,28 +12,12 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const requiredConfigKeys = [
-  'apiKey',
-  'authDomain',
-  'projectId',
-  'storageBucket',
-  'messagingSenderId',
-  'appId',
-];
-
-const missingConfigKeys = requiredConfigKeys.filter((key) => !firebaseConfig[key]);
-
-if (missingConfigKeys.length > 0) {
-  throw new Error(
-    `Missing Firebase configuration: ${missingConfigKeys
-      .map((key) => `VITE_FIREBASE_${key.replace(/[A-Z]/g, (letter) => `_${letter}`).toUpperCase()}`)
-      .join(', ')}`
-  );
-}
-
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+const app = getApps().length > 0
+  ? getApp()
+  : initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
+
 export default app;
