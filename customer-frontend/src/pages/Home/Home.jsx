@@ -1,3 +1,4 @@
+import { getCurrentLocation } from '../../utils/location.js';
 import {
  useState 
 } from 'react';
@@ -52,6 +53,25 @@ export default function Home() {
   const navigate = useNavigate();
 
   const [query, setQuery] = useState('');
+  const [locationLoading, setLocationLoading] = useState(false);
+  async function handleUseLocation() {
+  try {
+    setLocationLoading(true);
+
+    const location = await getCurrentLocation();
+
+    console.log('Customer location:', location);
+
+    navigate(
+      `/customer/search?lat=${location.lat}&lng=${location.lng}`
+    );
+  } catch (error) {
+    console.error('Location error:', error);
+    alert('Unable to get your location. Please allow location access.');
+  } finally {
+    setLocationLoading(false);
+  }
+}
 
 
   function handleSearch(event) {
@@ -155,9 +175,13 @@ t('location.title')
 t('location.description')
 }</p>
         </div>
-        <button type="button">{
-t('location.use')
-}</button>
+        <button
+  type="button"
+  onClick={handleUseLocation}
+  disabled={locationLoading}
+>
+  {locationLoading ? 'Getting location...' : t('location.use')}
+</button>
       </section>
 
       <section>

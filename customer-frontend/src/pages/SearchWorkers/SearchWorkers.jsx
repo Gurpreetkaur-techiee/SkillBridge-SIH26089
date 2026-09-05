@@ -1,3 +1,4 @@
+import WorkerMap from '../../components/WorkerMap/WorkerMap';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal, X, Star, MapPin } from 'lucide-react';
@@ -90,12 +91,31 @@ const serviceOptions = [
   'Carpenter',
   'Painter',
 ];
+function calculateDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371;
 
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return R * c;
+}
 export default function SearchWorkers() {
   const { t, language } = useApp();
   const text = filterCopy[language];
 
   const [searchParams] = useSearchParams();
+  const customerLocation = {
+  lat: Number(searchParams.get('lat')),
+  lng: Number(searchParams.get('lng')),
+};
   const initialService = searchParams.get('service') || '';
 
   const [query, setQuery] = useState(
@@ -173,12 +193,53 @@ export default function SearchWorkers() {
       matchesRating
     );
   });
+  filteredWorkers = filteredWorkers.map((worker) => {
+  const latitude = Number(worker.latitude);
+  const longitude = Number(worker.longitude);
+  console.log('Worker coordinates:', worker.name, worker.latitude, worker.longitude);
+
+  if (
+    customerLocation &&
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude)
+  ) {
+    return {
+      ...worker,
+      distance: calculateDistance(
+        customerLocation.lat,
+        customerLocation.lng,
+        latitude,
+        longitude
+      ),
+    };
+  }
+
+  return worker;
+});
+if (filters.distance) {
+  filteredWorkers = filteredWorkers.filter(
+    (worker) =>
+      worker.distance !== undefined &&
+      worker.distance <= Number(filters.distance)
+  );
+}
 
   if (filters.sort === 'rating') {
-    filteredWorkers = [...filteredWorkers].sort(
-      (a, b) => Number(b.rating) - Number(a.rating)
-    );
-  }
+  filteredWorkers = [...filteredWorkers].sort(
+    (a, b) => Number(b.rating) - Number(a.rating)
+  );
+}
+
+if (filters.sort === 'nearest') {
+  filteredWorkers = [...filteredWorkers].sort(
+    (a, b) => {
+      const distanceA = a.distance ?? Infinity;
+      const distanceB = b.distance ?? Infinity;
+
+      return distanceA - distanceB;
+    }
+  );
+}
 
   return (
     <>
@@ -295,25 +356,53 @@ export default function SearchWorkers() {
                 </option>
               </select>
             </label>
-
             <label>
-              {text.sort}
+  {text.distance}
 
-              <select
-                name="sort"
-                value={filters.sort}
-                onChange={updateFilter}
-              >
-                <option value="">
-                  {text.recommended}
-                </option>
+  <select
+    name="distance"
+    value={filters.distance}
+    onChange={updateFilter}
+  >
+    <option value="">
+      {text.anyDistance}
+    </option>
 
-                <option value="rating">
-                  {text.highest}
-                </option>
-              </select>
-            </label>
+    <option value="3">
+      {text.within3}
+    </option>
 
+    <option value="10">
+      {text.within10}
+    </option>
+
+    <option value="20">
+      {text.within20}
+    </option>
+  </select>
+</label>
+  
+            <label>
+  {text.sort}
+
+  <select
+    name="sort"
+    value={filters.sort}
+    onChange={updateFilter}
+  >
+    <option value="">
+      {text.recommended}
+    </option>
+
+    <option value="rating">
+      {text.highest}
+    </option>
+
+    <option value="nearest">
+      {text.nearest}
+    </option>
+  </select>
+</label>
           </div>
         )}
       </div>
@@ -325,11 +414,10 @@ export default function SearchWorkers() {
         </p>
       )}
 
-      <div className="map-placeholder">
-        <strong>{t('search.map')}</strong>
-        <span>{t('search.mapDescription')}</span>
-      </div>
-
+       <WorkerMap
+  workers={filteredWorkers}
+  customerLocation={customerLocation}
+/>
       {loading && (
         <p>Loading workers...</p>
       )}

@@ -1,3 +1,4 @@
+import { getCurrentLocation } from '../../utils/location';
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
@@ -21,6 +22,27 @@ export default function Booking() {
   const [worker, setWorker] = useState(null);
   const [loadingWorker, setLoadingWorker] = useState(true);
   const [workerError, setWorkerError] = useState('');
+  const [customerLocation, setCustomerLocation] = useState(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const handleGetCurrentLocation = async () => {
+    try {
+      setLocationLoading(true);
+      setLocationError('');
+
+      const location = await getCurrentLocation();
+
+      setCustomerLocation(location);
+    } catch (error) {
+      console.error('Location error:', error);
+
+      setLocationError(
+        'Unable to get your location. Please allow location access.'
+      );
+    } finally {
+      setLocationLoading(false);
+    }
+  };
 
   const [data, setData] = useState({
     service: '',
@@ -312,10 +334,14 @@ export default function Booking() {
               <select
                 name="location"
                 value={data.location}
-                onChange={update}
-                required
+                onChange={(event) => {
+                  update(event);
+
+                  if (event.target.value === 'current') {
+                    handleGetCurrentLocation();
+                  }
+                }}
               >
-                <option value="">Choose an option</option>
                 <option value="current">
                   Use my current location
                 </option>
