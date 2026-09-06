@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
-  MapPin,
   Briefcase,
   X,
   RotateCcw,
@@ -17,7 +20,10 @@ import LoadingState from '../../components/LoadingState/LoadingState';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
 
 import { useApp } from '../../context/AppContext';
-import { bookingsGateway } from '../../services/integrations';
+import {
+  bookingsGateway,
+  authGateway,
+} from '../../services/integrations';
 
 export default function AvailableBookingsPage() {
   const { t, showToast } = useApp();
@@ -27,27 +33,52 @@ export default function AvailableBookingsPage() {
   const [allBookings, setAllBookings] = useState([]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedDistance, setSelectedDistance] = useState('all');
-  const [selectedDateFilter, setSelectedDateFilter] = useState('all');
+  const [selectedCategory, setSelectedCategory] =
+    useState('all');
+  const [selectedDistance, setSelectedDistance] =
+    useState('all');
+  const [selectedDateFilter, setSelectedDateFilter] =
+    useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
-  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [selectedBooking, setSelectedBooking] =
+    useState(null);
   const [actionType, setActionType] = useState(null);
-  const [isProcessingAction, setIsProcessingAction] = useState(false);
+  const [isProcessingAction, setIsProcessingAction] =
+    useState(false);
+
+  // =================================================
+  // FETCH BOOKINGS
+  // =================================================
 
   const fetchBookings = async () => {
     try {
       setIsLoading(true);
 
-      const data = await bookingsGateway.getAvailableBookings();
+      const data =
+        await bookingsGateway.getAvailableBookings();
 
-      setAllBookings(Array.isArray(data) ? data : []);
+      const bookings = Array.isArray(data)
+        ? data
+        : [];
+
+      console.log(
+        '[SkillBridge] Worker available bookings:',
+        bookings
+      );
+
+      setAllBookings(bookings);
     } catch (err) {
-      console.error('Failed to fetch available bookings:', err);
+      console.error(
+        'Failed to fetch available bookings:',
+        err
+      );
+
+      setAllBookings([]);
 
       showToast(
-        err.message || 'Failed to load available service requests.',
+        err.message ||
+          'Failed to load available service requests.',
         'error'
       );
     } finally {
@@ -55,14 +86,57 @@ export default function AvailableBookingsPage() {
     }
   };
 
+  // =================================================
+  // WAIT FOR FIREBASE AUTH BEFORE FETCHING
+  // =================================================
+
   useEffect(() => {
-    fetchBookings();
+    let isMounted = true;
+
+    const unsubscribe =
+      authGateway.onAuthStateChanged(
+        async (user) => {
+          if (!isMounted) return;
+
+          console.log(
+            '[SkillBridge] Worker auth state:',
+            user
+              ? {
+                  uid: user.uid,
+                  email: user.email,
+                }
+              : 'SIGNED OUT'
+          );
+
+          if (!user) {
+            setAllBookings([]);
+            setIsLoading(false);
+            return;
+          }
+
+          await fetchBookings();
+        }
+      );
+
+    return () => {
+      isMounted = false;
+
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
   }, []);
+
+  // =================================================
+  // FILTER OPTIONS
+  // =================================================
 
   const categoryOptions = [
     {
       value: 'all',
-      label: t('availableBookings.allCategories'),
+      label: t(
+        'availableBookings.allCategories'
+      ),
     },
     {
       value: 'electrician',
@@ -90,7 +164,9 @@ export default function AvailableBookingsPage() {
     },
     {
       value: 'appliance_repair',
-      label: t('services.appliance_repair'),
+      label: t(
+        'services.appliance_repair'
+      ),
     },
     {
       value: 'gardener',
@@ -109,19 +185,27 @@ export default function AvailableBookingsPage() {
   const distanceOptions = [
     {
       value: 'all',
-      label: t('availableBookings.allDistances'),
+      label: t(
+        'availableBookings.allDistances'
+      ),
     },
     {
       value: '5',
-      label: t('availableBookings.within5km'),
+      label: t(
+        'availableBookings.within5km'
+      ),
     },
     {
       value: '10',
-      label: t('availableBookings.within10km'),
+      label: t(
+        'availableBookings.within10km'
+      ),
     },
     {
       value: '25',
-      label: t('availableBookings.within25km'),
+      label: t(
+        'availableBookings.within25km'
+      ),
     },
   ];
 
@@ -136,185 +220,661 @@ export default function AvailableBookingsPage() {
     },
     {
       value: 'tomorrow',
-      label: t('availableBookings.tomorrow'),
+      label: t(
+        'availableBookings.tomorrow'
+      ),
     },
     {
       value: 'thisWeek',
-      label: t('availableBookings.thisWeek'),
+      label: t(
+        'availableBookings.thisWeek'
+      ),
     },
   ];
 
   const sortOptions = [
     {
       value: 'newest',
-      label: t('availableBookings.sortNewest'),
+      label: t(
+        'availableBookings.sortNewest'
+      ),
     },
     {
       value: 'distance',
-      label: t('availableBookings.sortDistance'),
+      label: t(
+        'availableBookings.sortDistance'
+      ),
     },
     {
       value: 'priceHigh',
-      label: t('availableBookings.sortPriceHigh'),
+      label: t(
+        'availableBookings.sortPriceHigh'
+      ),
     },
     {
       value: 'priceLow',
-      label: t('availableBookings.sortPriceLow'),
+      label: t(
+        'availableBookings.sortPriceLow'
+      ),
     },
   ];
 
-  const isSameDay = (dateValue, targetDate) => {
-    if (!dateValue) return false;
+  // =================================================
+  // FILTER HELPERS
+  // =================================================
 
-    const date = new Date(dateValue);
+  const SERVICE_ALIASES = {
+    electrician: [
+      'electrician',
+      'electrical',
+      'electric',
+    ],
+    plumber: [
+      'plumber',
+      'plumbing',
+    ],
+    cleaner: [
+      'cleaner',
+      'cleaning',
+      'cleaning services',
+    ],
+    carpenter: [
+      'carpenter',
+      'carpentry',
+    ],
+    mechanic: [
+      'mechanic',
+      'automotive',
+      'car repair',
+    ],
+    painter: [
+      'painter',
+      'painting',
+    ],
+    appliance_repair: [
+      'appliance_repair',
+      'appliance repair',
+      'appliances',
+    ],
+    gardener: [
+      'gardener',
+      'gardening',
+      'landscaper',
+      'landscaping',
+    ],
+    hvac: [
+      'hvac',
+      'ac technician',
+      'air conditioner',
+      'air conditioning',
+    ],
+    pest_control: [
+      'pest control',
+      'pest_control',
+    ],
+  };
 
-    if (Number.isNaN(date.getTime())) {
+  const normalizeText = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase();
+
+  /*
+   * Find the real service key for a booking.
+   *
+   * A booking may store its service in:
+   * - serviceCategory
+   * - serviceName
+   * - primaryService
+   * - serviceId
+   * - title
+   * - category
+   *
+   * This keeps the filter working even when
+   * the customer booking uses a different field.
+   */
+  const getBookingServiceKey = (booking) => {
+    const values = [
+      booking.serviceCategory,
+      booking.serviceName,
+      booking.primaryService,
+      booking.serviceId,
+      booking.title,
+      booking.category,
+    ]
+      .filter(Boolean)
+      .map(normalizeText);
+
+    for (const [
+      serviceKey,
+      aliases,
+    ] of Object.entries(
+      SERVICE_ALIASES
+    )) {
+      const matched = values.some(
+        (value) =>
+          aliases.some(
+            (alias) =>
+              value === alias ||
+              value.includes(alias) ||
+              alias.includes(value)
+          )
+      );
+
+      if (matched) {
+        return serviceKey;
+      }
+    }
+
+    return '';
+  };
+
+  /*
+   * Get a usable numeric distance.
+   *
+   * Firestore bookings may contain:
+   * - distanceKm
+   * - distance
+   * - distanceText / distanceLabel
+   *
+   * "Nearby" is treated as within 5 km so
+   * the distance filter remains useful for
+   * customer-created bookings that do not
+   * contain an exact number.
+   */
+  const getBookingDistance = (booking) => {
+    const distance = Number(
+      booking.distanceKm ??
+        booking.distance ??
+        NaN
+    );
+
+    if (Number.isFinite(distance)) {
+      return distance;
+    }
+
+    const distanceText =
+      normalizeText(
+        booking.distanceText ||
+          booking.distanceLabel
+      );
+
+    if (
+      distanceText.includes(
+        'nearby'
+      )
+    ) {
+      return 5;
+    }
+
+    return null;
+  };
+
+  /*
+   * Convert the booking date into a real Date.
+   *
+   * Supports:
+   * - normal dates such as 2026-09-06
+   * - "Scheduled for Today"
+   * - "Today"
+   * - "Tomorrow"
+   */
+  const getBookingDate = (booking) => {
+    const rawDate =
+      booking.date ||
+      booking.scheduledDate ||
+      booking.bookingDate;
+
+    if (!rawDate) {
+      return null;
+    }
+
+    const normalized =
+      normalizeText(rawDate);
+
+    if (
+      normalized.includes(
+        'today'
+      )
+    ) {
+      const today =
+        new Date();
+
+      return new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      );
+    }
+
+    if (
+      normalized.includes(
+        'tomorrow'
+      )
+    ) {
+      const tomorrow =
+        new Date();
+
+      tomorrow.setDate(
+        tomorrow.getDate() + 1
+      );
+
+      return new Date(
+        tomorrow.getFullYear(),
+        tomorrow.getMonth(),
+        tomorrow.getDate()
+      );
+    }
+
+    const parsed =
+      new Date(rawDate);
+
+    if (
+      Number.isNaN(
+        parsed.getTime()
+      )
+    ) {
+      return null;
+    }
+
+    return new Date(
+      parsed.getFullYear(),
+      parsed.getMonth(),
+      parsed.getDate()
+    );
+  };
+
+  const isSameDay = (
+    bookingDate,
+    targetDate
+  ) => {
+    if (
+      !bookingDate ||
+      !targetDate
+    ) {
       return false;
     }
 
     return (
-      date.getFullYear() === targetDate.getFullYear() &&
-      date.getMonth() === targetDate.getMonth() &&
-      date.getDate() === targetDate.getDate()
+      bookingDate.getFullYear() ===
+        targetDate.getFullYear() &&
+      bookingDate.getMonth() ===
+        targetDate.getMonth() &&
+      bookingDate.getDate() ===
+        targetDate.getDate()
     );
   };
 
-  const isWithinThisWeek = (dateValue) => {
-    if (!dateValue) return false;
-
-    const date = new Date(dateValue);
-
-    if (Number.isNaN(date.getTime())) {
+  const isWithinThisWeek = (
+    bookingDate
+  ) => {
+    if (!bookingDate) {
       return false;
     }
 
-    const today = new Date();
+    const today =
+      new Date();
 
-    const startOfToday = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate()
+    const startOfToday =
+      new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate()
+      );
+
+    const dayOfWeek =
+      startOfToday.getDay();
+
+    const mondayOffset =
+      dayOfWeek === 0
+        ? -6
+        : 1 - dayOfWeek;
+
+    const startOfWeek =
+      new Date(
+        startOfToday
+      );
+
+    startOfWeek.setDate(
+      startOfToday.getDate() +
+        mondayOffset
     );
 
-    const dayOfWeek = startOfToday.getDay();
+    const endOfWeek =
+      new Date(
+        startOfWeek
+      );
 
-    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    endOfWeek.setDate(
+      startOfWeek.getDate() + 6
+    );
 
-    const startOfWeek = new Date(startOfToday);
-    startOfWeek.setDate(startOfToday.getDate() + mondayOffset);
+    endOfWeek.setHours(
+      23,
+      59,
+      59,
+      999
+    );
 
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
-
-    return date >= startOfWeek && date <= endOfWeek;
+    return (
+      bookingDate >=
+        startOfWeek &&
+      bookingDate <=
+        endOfWeek
+    );
   };
 
-  const filteredBookings = useMemo(() => {
-    let list = [...allBookings];
+  // =================================================
+  // FILTER + SORT BOOKINGS
+  // =================================================
 
-    // Search
-    if (searchQuery.trim()) {
-      const q = searchQuery.trim().toLowerCase();
+  const filteredBookings =
+    useMemo(() => {
+      let list = [
+        ...allBookings,
+      ];
 
-      list = list.filter(
-        (booking) =>
-          booking.title?.toLowerCase().includes(q) ||
-          booking.serviceCategory?.toLowerCase().includes(q) ||
-          booking.locationAddress?.toLowerCase().includes(q) ||
-          booking.problemDescription?.toLowerCase().includes(q) ||
-          booking.customerName?.toLowerCase().includes(q)
+      // ---------------------------------------------
+      // SEARCH
+      // ---------------------------------------------
+
+      if (
+        searchQuery.trim()
+      ) {
+        const q =
+          searchQuery
+            .trim()
+            .toLowerCase();
+
+        list = list.filter(
+          (booking) => {
+            const searchableText =
+              [
+                booking.title,
+                booking.serviceName,
+                booking.serviceCategory,
+                booking.primaryService,
+                booking.serviceId,
+                booking.category,
+                booking.locationAddress,
+                booking.address,
+                booking.problemDescription,
+                booking.notes,
+                booking.customerName,
+              ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+
+            return searchableText.includes(
+              q
+            );
+          }
+        );
+      }
+
+      // ---------------------------------------------
+      // SERVICE / CATEGORY
+      // ---------------------------------------------
+
+      if (
+        selectedCategory !==
+        'all'
+      ) {
+        list =
+          list.filter(
+            (booking) =>
+              getBookingServiceKey(
+                booking
+              ) ===
+              selectedCategory
+          );
+      }
+
+      // ---------------------------------------------
+      // DISTANCE
+      // ---------------------------------------------
+
+      if (
+        selectedDistance !==
+        'all'
+      ) {
+        const maxKm =
+          Number(
+            selectedDistance
+          );
+
+        list =
+          list.filter(
+            (booking) => {
+              const distance =
+                getBookingDistance(
+                  booking
+                );
+
+              return (
+                distance !== null &&
+                distance <= maxKm
+              );
+            }
+          );
+      }
+
+      // ---------------------------------------------
+      // DATE
+      // ---------------------------------------------
+
+      if (
+        selectedDateFilter !==
+        'all'
+      ) {
+        const today =
+          new Date();
+
+        const todayDate =
+          new Date(
+            today.getFullYear(),
+            today.getMonth(),
+            today.getDate()
+          );
+
+        const tomorrow =
+          new Date(
+            todayDate
+          );
+
+        tomorrow.setDate(
+          tomorrow.getDate() + 1
+        );
+
+        list =
+          list.filter(
+            (booking) => {
+              const bookingDate =
+                getBookingDate(
+                  booking
+                );
+
+              if (
+                !bookingDate
+              ) {
+                return false;
+              }
+
+              if (
+                selectedDateFilter ===
+                'today'
+              ) {
+                return isSameDay(
+                  bookingDate,
+                  todayDate
+                );
+              }
+
+              if (
+                selectedDateFilter ===
+                'tomorrow'
+              ) {
+                return isSameDay(
+                  bookingDate,
+                  tomorrow
+                );
+              }
+
+              if (
+                selectedDateFilter ===
+                'thisWeek'
+              ) {
+                return isWithinThisWeek(
+                  bookingDate
+                );
+              }
+
+              return true;
+            }
+          );
+      }
+
+      // ---------------------------------------------
+      // SORT
+      // ---------------------------------------------
+
+      list.sort(
+        (a, b) => {
+          // Nearest First
+          if (
+            sortBy ===
+            'distance'
+          ) {
+            const distanceA =
+              getBookingDistance(
+                a
+              );
+
+            const distanceB =
+              getBookingDistance(
+                b
+              );
+
+            if (
+              distanceA ===
+                null &&
+              distanceB ===
+                null
+            ) {
+              return 0;
+            }
+
+            if (
+              distanceA ===
+              null
+            ) {
+              return 1;
+            }
+
+            if (
+              distanceB ===
+              null
+            ) {
+              return -1;
+            }
+
+            return (
+              distanceA -
+              distanceB
+            );
+          }
+
+          // Highest payout
+          if (
+            sortBy ===
+            'priceHigh'
+          ) {
+            return (
+              Number(
+                b.estimatedPayout ??
+                  b.amount ??
+                  0
+              ) -
+              Number(
+                a.estimatedPayout ??
+                  a.amount ??
+                  0
+              )
+            );
+          }
+
+          // Lowest payout
+          if (
+            sortBy ===
+            'priceLow'
+          ) {
+            return (
+              Number(
+                a.estimatedPayout ??
+                  a.amount ??
+                  0
+              ) -
+              Number(
+                b.estimatedPayout ??
+                  b.amount ??
+                  0
+              )
+            );
+          }
+
+          // Newest First
+          const createdA =
+            a.createdAt
+              ? new Date(
+                  a.createdAt
+                ).getTime()
+              : 0;
+
+          const createdB =
+            b.createdAt
+              ? new Date(
+                  b.createdAt
+                ).getTime()
+              : 0;
+
+          if (
+            Number.isFinite(
+              createdA
+            ) &&
+            Number.isFinite(
+              createdB
+            )
+          ) {
+            return (
+              createdB -
+              createdA
+            );
+          }
+
+          return String(
+            b.id || ''
+          ).localeCompare(
+            String(
+              a.id || ''
+            )
+          );
+        }
       );
-    }
 
-    // Category
-    if (selectedCategory !== 'all') {
-      list = list.filter(
-        (booking) =>
-          booking.serviceCategory === selectedCategory
-      );
-    }
+      return list;
+    }, [
+      allBookings,
+      searchQuery,
+      selectedCategory,
+      selectedDistance,
+      selectedDateFilter,
+      sortBy,
+    ]);
 
-    // Distance
-    if (selectedDistance !== 'all') {
-      const maxKm = Number(selectedDistance);
-
-      list = list.filter(
-        (booking) =>
-          Number(booking.distanceKm || 0) <= maxKm
-      );
-    }
-
-    // Date
-    if (selectedDateFilter !== 'all') {
-      const today = new Date();
-
-      if (selectedDateFilter === 'today') {
-        list = list.filter((booking) =>
-          isSameDay(booking.date, today)
-        );
-      }
-
-      if (selectedDateFilter === 'tomorrow') {
-        const tomorrow = new Date(today);
-        tomorrow.setDate(today.getDate() + 1);
-
-        list = list.filter((booking) =>
-          isSameDay(booking.date, tomorrow)
-        );
-      }
-
-      if (selectedDateFilter === 'thisWeek') {
-        list = list.filter((booking) =>
-          isWithinThisWeek(booking.date)
-        );
-      }
-    }
-
-    // Sorting
-    list.sort((a, b) => {
-      if (sortBy === 'distance') {
-        return (
-          Number(a.distanceKm || 0) -
-          Number(b.distanceKm || 0)
-        );
-      }
-
-      if (sortBy === 'priceHigh') {
-        return (
-          Number(b.estimatedPayout || 0) -
-          Number(a.estimatedPayout || 0)
-        );
-      }
-
-      if (sortBy === 'priceLow') {
-        return (
-          Number(a.estimatedPayout || 0) -
-          Number(b.estimatedPayout || 0)
-        );
-      }
-
-      // Newest
-      const dateA = new Date(
-        a.createdAt || a.date || 0
-      ).getTime();
-
-      const dateB = new Date(
-        b.createdAt || b.date || 0
-      ).getTime();
-
-      return dateB - dateA;
-    });
-
-    return list;
-  }, [
-    allBookings,
-    searchQuery,
-    selectedCategory,
-    selectedDistance,
-    selectedDateFilter,
-    sortBy,
-  ]);
+  // =================================================
+  // RESET FILTERS
+  // =================================================
 
   const handleResetFilters = () => {
     setSearchQuery('');
@@ -324,7 +884,14 @@ export default function AvailableBookingsPage() {
     setSortBy('newest');
   };
 
-  const handleOpenConfirm = (booking, type) => {
+  // =================================================
+  // CONFIRM ACTION
+  // =================================================
+
+  const handleOpenConfirm = (
+    booking,
+    type
+  ) => {
     setSelectedBooking(booking);
     setActionType(type);
   };
@@ -336,77 +903,107 @@ export default function AvailableBookingsPage() {
     setActionType(null);
   };
 
-  const handleConfirmAction = async () => {
-    if (!selectedBooking || !actionType) return;
+  // =================================================
+  // ACCEPT / REJECT
+  // =================================================
 
-    try {
-      setIsProcessingAction(true);
-
-      if (actionType === 'accept') {
-        await bookingsGateway.acceptBooking(
-          selectedBooking.id
-        );
-
-        showToast(
-          t('availableBookings.acceptedSuccess'),
-          'success'
-        );
-      } else {
-        await bookingsGateway.rejectBooking(
-          selectedBooking.id
-        );
-
-        showToast(
-          t('availableBookings.rejectedSuccess'),
-          'info'
-        );
+  const handleConfirmAction =
+    async () => {
+      if (
+        !selectedBooking ||
+        !actionType
+      ) {
+        return;
       }
 
-      setSelectedBooking(null);
-      setActionType(null);
+      try {
+        setIsProcessingAction(
+          true
+        );
 
-      await fetchBookings();
-    } catch (err) {
-      console.error(
-        `Failed to ${actionType} booking:`,
-        err
-      );
+        if (
+          actionType === 'accept'
+        ) {
+          await bookingsGateway.acceptBooking(
+            selectedBooking.id
+          );
 
-      showToast(
-        err.message || 'Booking request could not be updated.',
-        'error'
-      );
-    } finally {
-      setIsProcessingAction(false);
-    }
-  };
+          showToast(
+            t(
+              'availableBookings.acceptedSuccess'
+            ),
+            'success'
+          );
+        } else {
+          await bookingsGateway.rejectBooking(
+            selectedBooking.id
+          );
+
+          showToast(
+            t(
+              'availableBookings.rejectedSuccess'
+            ),
+            'info'
+          );
+        }
+
+        setSelectedBooking(null);
+        setActionType(null);
+
+        await fetchBookings();
+      } catch (err) {
+        console.error(
+          `Failed to ${actionType} booking:`,
+          err
+        );
+
+        showToast(
+          err.message ||
+            'Booking request could not be updated.',
+          'error'
+        );
+      } finally {
+        setIsProcessingAction(
+          false
+        );
+      }
+    };
 
   const isFiltered =
     searchQuery.trim() !== '' ||
     selectedCategory !== 'all' ||
     selectedDistance !== 'all' ||
-    selectedDateFilter !== 'all' ||
+    selectedDateFilter !==
+      'all' ||
     sortBy !== 'newest';
+
+  // =================================================
+  // UI
+  // =================================================
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
 
-      {/* Page Header */}
+      {/* HEADER */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-          {t('availableBookings.title')}
+          {t(
+            'availableBookings.title'
+          )}
         </h1>
 
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          {t('availableBookings.subtitle')}
+          {t(
+            'availableBookings.subtitle'
+          )}
         </p>
       </div>
 
-      {/* Search and Filters */}
+      {/* SEARCH + FILTERS */}
       <Card className="p-4 sm:p-5 shadow-xs border-slate-200/80 dark:border-slate-800">
         <div className="flex flex-col gap-4">
 
-          {/* Search */}
+          {/* SEARCH */}
           <div className="flex-1">
             <Input
               placeholder={t(
@@ -414,7 +1011,9 @@ export default function AvailableBookingsPage() {
               )}
               value={searchQuery}
               onChange={(e) =>
-                setSearchQuery(e.target.value)
+                setSearchQuery(
+                  e.target.value
+                )
               }
               icon={Search}
               rightElement={
@@ -422,7 +1021,9 @@ export default function AvailableBookingsPage() {
                   <button
                     type="button"
                     onClick={() =>
-                      setSearchQuery('')
+                      setSearchQuery(
+                        ''
+                      )
                     }
                     className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                   >
@@ -433,32 +1034,44 @@ export default function AvailableBookingsPage() {
             />
           </div>
 
-          {/* Filters */}
+          {/* FILTERS */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
 
             <Select
               options={categoryOptions}
-              value={selectedCategory}
+              value={
+                selectedCategory
+              }
               onChange={(e) =>
-                setSelectedCategory(e.target.value)
+                setSelectedCategory(
+                  e.target.value
+                )
               }
               placeholder=""
             />
 
             <Select
               options={distanceOptions}
-              value={selectedDistance}
+              value={
+                selectedDistance
+              }
               onChange={(e) =>
-                setSelectedDistance(e.target.value)
+                setSelectedDistance(
+                  e.target.value
+                )
               }
               placeholder=""
             />
 
             <Select
               options={dateOptions}
-              value={selectedDateFilter}
+              value={
+                selectedDateFilter
+              }
               onChange={(e) =>
-                setSelectedDateFilter(e.target.value)
+                setSelectedDateFilter(
+                  e.target.value
+                )
               }
               placeholder=""
             />
@@ -467,26 +1080,34 @@ export default function AvailableBookingsPage() {
               options={sortOptions}
               value={sortBy}
               onChange={(e) =>
-                setSortBy(e.target.value)
+                setSortBy(
+                  e.target.value
+                )
               }
               placeholder=""
             />
 
           </div>
 
-          {/* Results Count / Reset */}
+          {/* RESULT COUNT */}
           <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
 
             <span className="font-semibold text-slate-600 dark:text-slate-400">
-              {t('availableBookings.resultsCount', {
-                count: filteredBookings.length,
-              })}
+              {t(
+                'availableBookings.resultsCount',
+                {
+                  count:
+                    filteredBookings.length,
+                }
+              )}
             </span>
 
             {isFiltered && (
               <button
                 type="button"
-                onClick={handleResetFilters}
+                onClick={
+                  handleResetFilters
+                }
                 className="text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1 cursor-pointer"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -503,17 +1124,26 @@ export default function AvailableBookingsPage() {
         </div>
       </Card>
 
-      {/* Booking Results */}
+      {/* BOOKINGS */}
       {isLoading ? (
-        <LoadingState message="Loading available booking requests..." />
-      ) : filteredBookings.length === 0 ? (
+        <LoadingState
+          message="Loading available booking requests..."
+        />
+      ) : filteredBookings.length ===
+        0 ? (
         <EmptyState
-          title={t('availableBookings.emptyTitle')}
-          description={t('availableBookings.emptyDesc')}
+          title={t(
+            'availableBookings.emptyTitle'
+          )}
+          description={t(
+            'availableBookings.emptyDesc'
+          )}
           icon={Briefcase}
           actionText={
             isFiltered
-              ? t('availableBookings.resetFilters')
+              ? t(
+                  'availableBookings.resetFilters'
+                )
               : undefined
           }
           onAction={
@@ -525,60 +1155,86 @@ export default function AvailableBookingsPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-          {filteredBookings.map((booking) => (
-            <BookingCard
-              key={booking.id}
-              booking={booking}
+          {filteredBookings.map(
+            (booking) => (
+              <BookingCard
+                key={booking.id}
+                booking={booking}
 
-              onViewDetails={(id) =>
-                navigate(`/booking/${id}`)
-              }
+                onViewDetails={(id) =>
+                  navigate(
+                    `/booking/${id}`
+                  )
+                }
 
-              onAccept={(booking) =>
-                handleOpenConfirm(
-                  booking,
-                  'accept'
-                )
-              }
+                onAccept={(booking) =>
+                  handleOpenConfirm(
+                    booking,
+                    'accept'
+                  )
+                }
 
-              onReject={(booking) =>
-                handleOpenConfirm(
-                  booking,
-                  'reject'
-                )
-              }
-            />
-          ))}
+                onReject={(booking) =>
+                  handleOpenConfirm(
+                    booking,
+                    'reject'
+                  )
+                }
+              />
+            )
+          )}
 
         </div>
       )}
 
-      {/* Accept / Reject Confirmation */}
+      {/* CONFIRMATION */}
       <ConfirmDialog
-        isOpen={!!selectedBooking}
-        onClose={handleCloseConfirm}
-        onConfirm={handleConfirmAction}
-        isLoading={isProcessingAction}
+        isOpen={
+          !!selectedBooking
+        }
+        onClose={
+          handleCloseConfirm
+        }
+        onConfirm={
+          handleConfirmAction
+        }
+        isLoading={
+          isProcessingAction
+        }
 
         title={
           actionType === 'accept'
-            ? t('bookingDetails.acceptJobPrompt')
-            : t('bookingDetails.rejectJobPrompt')
+            ? t(
+                'bookingDetails.acceptJobPrompt'
+              )
+            : t(
+                'bookingDetails.rejectJobPrompt'
+              )
         }
 
         message={
           actionType === 'accept'
-            ? t('bookingDetails.acceptJobDesc')
-            : t('bookingDetails.rejectJobDesc')
+            ? t(
+                'bookingDetails.acceptJobDesc'
+              )
+            : t(
+                'bookingDetails.rejectJobDesc'
+              )
         }
 
         confirmText={
           actionType === 'accept'
-            ? t('bookingDetails.confirmAccept')
-            : t('bookingDetails.confirmReject')
+            ? t(
+                'bookingDetails.confirmAccept'
+              )
+            : t(
+                'bookingDetails.confirmReject'
+              )
         }
 
-        cancelText={t('common.cancel')}
+        cancelText={t(
+          'common.cancel'
+        )}
 
         type={
           actionType === 'accept'

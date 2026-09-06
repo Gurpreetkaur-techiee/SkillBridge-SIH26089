@@ -1,154 +1,376 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState
+} from 'react';
+
 import {
   addDoc,
   collection,
-  getDocs,
   serverTimestamp
 } from 'firebase/firestore';
 
 import {
-  sampleWorkers,
-  sampleCustomerBookings,
+  onAuthStateChanged
+} from 'firebase/auth';
+
+import {
   sampleNotifications
 } from '../data/workersData';
 
-import { auth, db } from '../firebase';
+import {
+  auth,
+  db
+} from '../firebase';
+
+import {
+  getCustomerBookings,
+  cancelCustomerBooking
+} from '../services/bookingService';
 
 const AppContext = createContext();
 
 export function AppProvider({ children }) {
+  // =================================================
+  // NAVIGATION
+  // =================================================
+
   const [activeTab, setActiveTab] = useState('home');
+
+  // =================================================
+  // SEARCH
+  // =================================================
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [detectedService, setDetectedService] = useState('unknown');
-  const [serviceConfidence, setServiceConfidence] = useState(0);
 
-  // Location
-  const [userLocation, setUserLocation] = useState('Downtown Metro Area');
-  const [isLocating, setIsLocating] = useState(false);
-  const [locationDetected, setLocationDetected] = useState(false);
-  const [locationCoords, setLocationCoords] = useState(null);
+  // =================================================
+  // CATEGORY
+  // =================================================
 
-  // Selected items
-  const [selectedService, setSelectedService] = useState(null);
-  const [selectedWorker, setSelectedWorker] = useState(null);
+  const [selectedCategory, setSelectedCategory] =
+    useState('all');
 
-  // Bookings
-  const [bookings, setBookings] = useState([]);
+  // =================================================
+  // SERVICE FILTERS
+  // =================================================
 
-  // Notifications
-  const [notifications, setNotifications] = useState(sampleNotifications);
+  /*
+   * Shared service filters used by:
+   *
+   * - Popular Services
+   * - Find Workers
+   *
+   * Multiple services can be selected.
+   *
+   * Example:
+   * ['electrician', 'plumber']
+   *
+   * means:
+   * show electricians OR plumbers.
+   */
+  const [
+    selectedServiceFilters,
+    setSelectedServiceFilters
+  ] = useState([]);
 
-  // User profile
-  const [userProfile, setUserProfile] = useState({
-    name: 'Alex Morgan',
-    email: 'alex.morgan@example.com',
-    phone: '+1 (555) 234-5678',
-    avatar:
-      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250',
-    address: '742 Evergreen Terrace, Apt 4B, Springfield',
-    savedAddresses: [
-      {
-        id: 'addr-1',
-        label: 'Home',
-        address: '742 Evergreen Terrace, Apt 4B, Springfield',
-        isDefault: true
-      },
-      {
-        id: 'addr-2',
-        label: 'Office',
-        address: '100 Innovation Parkway, Suite 300',
-        isDefault: false
-      }
-    ]
-  });
+  // =================================================
+  // SERVICE DETECTION
+  // =================================================
 
-  // Load bookings from Firestore
+  const [detectedService, setDetectedService] =
+    useState('unknown');
+
+  const [serviceConfidence, setServiceConfidence] =
+    useState(0);
+
+  // =================================================
+  // LOCATION
+  // =================================================
+
+  const [userLocation, setUserLocation] =
+    useState('Downtown Metro Area');
+
+  const [isLocating, setIsLocating] =
+    useState(false);
+
+  const [locationDetected, setLocationDetected] =
+    useState(false);
+
+  const [locationCoords, setLocationCoords] =
+    useState(null);
+
+  // =================================================
+  // SELECTED ITEMS
+  // =================================================
+
+  const [selectedService, setSelectedService] =
+    useState(null);
+
+  const [selectedWorker, setSelectedWorker] =
+    useState(null);
+
+  // =================================================
+  // BOOKINGS
+  // =================================================
+
+  const [bookings, setBookings] =
+    useState([]);
+
+  // =================================================
+  // NOTIFICATIONS
+  // =================================================
+
+  const [notifications, setNotifications] =
+    useState(sampleNotifications);
+
+  // =================================================
+  // USER PROFILE
+  // =================================================
+
+  const [userProfile, setUserProfile] =
+    useState({
+      name: '',
+      email: '',
+      phone: '',
+      avatar:
+        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250',
+      address: 'Location unavailable',
+      savedAddresses: []
+    });
+
+  // =================================================
+  // LOAD CURRENT CUSTOMER PROFILE + BOOKINGS
+  // =================================================
+
   useEffect(() => {
-    const loadBookings = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, 'bookings'));
+    let unsubscribe;
 
-        const firebaseBookings = snapshot.docs.map((doc) => ({
-          firebaseId: doc.id,
-          ...doc.data()
-        }));
+    const setupAuthListener = () => {
+      unsubscribe = onAuthStateChanged(
+        auth,
+        async (currentUser) => {
+          // -----------------------------------------
+          // Logged out
+          // -----------------------------------------
 
-        setBookings(firebaseBookings);
-      } catch (error) {
-        console.error('Error loading bookings from Firebase:', error);
+          if (!currentUser) {
+            setBookings([]);
 
-        // No fake backend fallback
-        setBookings([]);
-      }
+            setUserProfile({
+              name: '',
+              email: '',
+              phone: '',
+              avatar:
+                'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250',
+              address: 'Location unavailable',
+              savedAddresses: []
+            });
+
+            return;
+          }
+
+          // -----------------------------------------
+          // Logged in
+          // -----------------------------------------
+
+          try {
+            // Load ONLY this customer's bookings.
+            const customerBookings =
+              await getCustomerBookings(
+                currentUser.uid
+              );
+
+            setBookings(customerBookings);
+
+          } catch (error) {
+            console.error(
+              'Error loading customer bookings:',
+              error
+            );
+
+            setBookings([]);
+          }
+
+          // -----------------------------------------
+          // Update profile information from
+          // Firebase Authentication.
+          // -----------------------------------------
+
+          setUserProfile((previousProfile) => ({
+            ...previousProfile,
+
+            name:
+              currentUser.displayName ||
+              previousProfile.name ||
+              'Customer',
+
+            email:
+              currentUser.email ||
+              previousProfile.email ||
+              '',
+
+            avatar:
+              currentUser.photoURL ||
+              previousProfile.avatar
+          }));
+        }
+      );
     };
 
-    loadBookings();
+    setupAuthListener();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, []);
 
-  const unreadNotificationsCount = notifications.filter(
-    (notification) => notification.unread
-  ).length;
+  // =================================================
+  // NOTIFICATION COUNT
+  // =================================================
 
-  // Detect user location
+  const unreadNotificationsCount =
+    notifications.filter(
+      (notification) => notification.unread
+    ).length;
+
+  // =================================================
+  // DETECT USER LOCATION
+  // =================================================
+
   const detectLocation = () => {
     setIsLocating(true);
 
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const lat = position.coords.latitude.toFixed(4);
-          const lng = position.coords.longitude.toFixed(4);
+          const lat =
+            position.coords.latitude.toFixed(4);
 
-          setLocationCoords({ lat, lng });
-          setUserLocation(`Near Location (${lat}, ${lng})`);
+          const lng =
+            position.coords.longitude.toFixed(4);
+
+          setLocationCoords({
+            lat,
+            lng
+          });
+
+          setUserLocation(
+            `Near Location (${lat}, ${lng})`
+          );
+
           setLocationDetected(true);
+
           setIsLocating(false);
         },
         () => {
-          setUserLocation('Location unavailable');
+          setUserLocation(
+            'Location unavailable'
+          );
+
           setLocationDetected(false);
+
           setIsLocating(false);
         },
-        { timeout: 5000 }
+        {
+          timeout: 5000
+        }
       );
     } else {
-      setUserLocation('Location unavailable');
+      setUserLocation(
+        'Location unavailable'
+      );
+
       setLocationDetected(false);
+
       setIsLocating(false);
     }
   };
 
+  // =================================================
+  // MARK ALL NOTIFICATIONS READ
+  // =================================================
+
   const markAllNotificationsRead = () => {
-    setNotifications((prev) =>
-      prev.map((notification) => ({
+    setNotifications((previous) =>
+      previous.map((notification) => ({
         ...notification,
         unread: false
       }))
     );
   };
 
-  // Create booking in Firestore
-  const createBooking = async (service, worker, notes = '') => {
+  // =================================================
+  // CREATE BOOKING IN FIRESTORE
+  // =================================================
+
+  const createBooking = async (
+    service,
+    worker,
+    notes = ''
+  ) => {
     const currentUser = auth.currentUser;
 
-    // Worker Firebase UID
-    const workerId = worker?.id || worker?.uid || null;
+    // A booking must belong to a logged-in customer.
+    if (!currentUser) {
+      throw new Error(
+        'Please login before creating a booking.'
+      );
+    }
+
+    // Worker Firebase UID.
+    const workerId =
+      worker?.id ||
+      worker?.uid ||
+      null;
+
+    // =================================================
+    // SERVICE KEY
+    // =================================================
+
+    /*
+     * service.id is the language-neutral service key.
+     *
+     * Examples:
+     * - electrician
+     * - plumber
+     * - cleaner
+     * - carpenter
+     * - mechanic
+     *
+     * This is stored separately from serviceName so
+     * the Worker portal can use its translation system.
+     */
+    const serviceCategory =
+      service?.id ||
+      service?.serviceCategory ||
+      'general';
 
     const bookingData = {
-      customerId: currentUser?.uid || null,
+      // ---------------------------------------------
+      // CUSTOMER
+      // ---------------------------------------------
+
+      customerId:
+        currentUser.uid,
+
       customerName:
-        currentUser?.displayName ||
+        currentUser.displayName ||
         userProfile.name ||
         'Customer',
+
       customerEmail:
-        currentUser?.email ||
+        currentUser.email ||
         userProfile.email ||
         '',
-      workerId: workerId,
 
-      serviceName: service.title,
-      category: service.category,
+      // ---------------------------------------------
+      // WORKER
+      // ---------------------------------------------
+
+      workerId,
 
       workerName: worker
         ? worker.name
@@ -158,72 +380,156 @@ export function AppProvider({ children }) {
         ? worker.avatar
         : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb',
 
-      date: 'Scheduled for Today',
-      status: 'pending',
-      statusLabel: 'Booking Pending',
-      amount: Number(service.price) || 0,
-      address: userProfile.address,
-      eta: '15-30 mins',
-      notes: notes
+      // ---------------------------------------------
+      // SERVICE
+      // ---------------------------------------------
+
+      title:
+        service?.title ||
+        'Service Request',
+
+      serviceName:
+        service?.title ||
+        'Service Request',
+
+      /*
+       * IMPORTANT:
+       * Store the internal service key, not the
+       * translated display text.
+       */
+      serviceCategory,
+
+      /*
+       * Keep the broad service category as well.
+       */
+      category:
+        service?.category ||
+        'Other',
+
+      // ---------------------------------------------
+      // BOOKING DETAILS
+      // ---------------------------------------------
+
+      date:
+        'Scheduled for Today',
+
+      status:
+        'pending',
+
+      statusLabel:
+        'Booking Pending',
+
+      amount:
+        Number(service?.price) || 0,
+
+      estimatedPayout:
+        Number(service?.price) || 0,
+
+      currency:
+        'INR',
+
+      address:
+        userProfile.address,
+
+      eta:
+        '15-30 mins',
+
+      notes:
+        notes
     };
 
     try {
-      // --------------------------------------------------
+      // =================================================
       // 1. CREATE BOOKING
-      // --------------------------------------------------
-      const docRef = await addDoc(
-        collection(db, 'bookings'),
-        {
-          ...bookingData,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp()
-        }
-      );
+      // =================================================
+
+      const docRef =
+        await addDoc(
+          collection(
+            db,
+            'bookings'
+          ),
+          {
+            ...bookingData,
+
+            createdAt:
+              serverTimestamp(),
+
+            updatedAt:
+              serverTimestamp()
+          }
+        );
 
       const firebaseBooking = {
         id: docRef.id,
-        firebaseId: docRef.id,
+
+        firebaseId:
+          docRef.id,
+
         ...bookingData
       };
 
-      setBookings((prev) => [
+      // Add only the booking created by the
+      // current customer to local state.
+      setBookings((previous) => [
         firebaseBooking,
-        ...prev
+        ...previous
       ]);
 
-      // --------------------------------------------------
+      // =================================================
       // 2. CREATE WORKER NOTIFICATION
-      // --------------------------------------------------
-      // Only send notification when a specific worker
-      // was selected.
+      // =================================================
+
+      // Only send notification when a specific
+      // worker was selected.
       if (workerId) {
         try {
           await addDoc(
-            collection(db, 'notifications'),
+            collection(
+              db,
+              'notifications'
+            ),
             {
-              workerId: workerId,
+              workerId,
 
-              type: 'booking_request',
+              type:
+                'booking_request',
 
-              bookingId: docRef.id,
+              bookingId:
+                docRef.id,
 
-              title: 'New Booking Request',
+              title:
+                'New Booking Request',
 
-              message: `${bookingData.customerName} requested ${service.title} at ${userProfile.address}.`,
+              message:
+                `${bookingData.customerName} requested ${service?.title || 'a service'} at ${userProfile.address}.`,
 
-              isRead: false,
+              /*
+               * Store the same language-neutral service
+               * key in the notification so the Worker
+               * portal can translate it if needed.
+               */
+              serviceCategory,
 
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
+              isRead:
+                false,
+
+              createdAt:
+                serverTimestamp(),
+
+              updatedAt:
+                serverTimestamp()
             }
           );
 
           console.log(
             'Worker notification created successfully.'
           );
+
         } catch (notificationError) {
-          // Booking is already created, so don't cancel it
-          // just because notification creation failed.
+          // Booking is already created.
+          // Do not cancel the booking if the
+          // notification fails.
           console.error(
             'Booking created, but worker notification failed:',
             notificationError
@@ -235,27 +541,36 @@ export function AppProvider({ children }) {
         );
       }
 
-      // --------------------------------------------------
+      // =================================================
       // 3. CUSTOMER LOCAL NOTIFICATION
-      // --------------------------------------------------
+      // =================================================
+
       const newNotification = {
-        id: `notif-${Date.now()}`,
+        id:
+          `notif-${Date.now()}`,
 
-        title: `Booking Confirmed: ${service.title}!`,
+        title:
+          `Booking Confirmed: ${service?.title || 'Service Request'}!`,
 
-        message: `Your booking has been received. A pro is being dispatched to ${userProfile.address}.`,
+        message:
+          `Your booking has been received. A pro is being dispatched to ${userProfile.address}.`,
 
-        time: 'Just now',
+        time:
+          'Just now',
 
-        unread: true,
+        unread:
+          true,
 
-        type: 'booking'
+        type:
+          'booking'
       };
 
-      setNotifications((prev) => [
-        newNotification,
-        ...prev
-      ]);
+      setNotifications(
+        (previous) => [
+          newNotification,
+          ...previous
+        ]
+      );
 
       return firebaseBooking;
 
@@ -269,17 +584,122 @@ export function AppProvider({ children }) {
     }
   };
 
+  // =================================================
+  // REMOVE CUSTOMER BOOKING
+  // =================================================
+
+  const removeBooking = async (bookingId) => {
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      throw new Error(
+        'Please login before removing a booking.'
+      );
+    }
+
+    if (!bookingId) {
+      throw new Error(
+        'Booking ID is required.'
+      );
+    }
+
+    try {
+      // Remove the booking from Firestore.
+      // The service also verifies that the booking
+      // belongs to the current customer.
+      await cancelCustomerBooking(
+        bookingId,
+        currentUser.uid
+      );
+
+      // Remove it from the local Customer portal
+      // immediately after successful deletion.
+      setBookings((previous) =>
+        previous.filter(
+          (booking) =>
+            booking.id !== bookingId &&
+            booking.firebaseId !== bookingId
+        )
+      );
+
+      // Add a local notification.
+      const cancellationNotification = {
+        id:
+          `notif-${Date.now()}`,
+
+        title:
+          'Booking Cancelled',
+
+        message:
+          'Your booking has been removed successfully.',
+
+        time:
+          'Just now',
+
+        unread:
+          true,
+
+        type:
+          'booking'
+      };
+
+      setNotifications(
+        (previous) => [
+          cancellationNotification,
+          ...previous
+        ]
+      );
+
+      return true;
+
+    } catch (error) {
+      console.error(
+        'Error removing booking:',
+        error
+      );
+
+      throw error;
+    }
+  };
+
+  // =================================================
+  // CONTEXT
+  // =================================================
+
   return (
     <AppContext.Provider
       value={{
+        // ---------------------------------------------
+        // Navigation
+        // ---------------------------------------------
+
         activeTab,
         setActiveTab,
+
+        // ---------------------------------------------
+        // Search
+        // ---------------------------------------------
 
         searchQuery,
         setSearchQuery,
 
+        // ---------------------------------------------
+        // Category
+        // ---------------------------------------------
+
         selectedCategory,
         setSelectedCategory,
+
+        // ---------------------------------------------
+        // Service Filters
+        // ---------------------------------------------
+
+        selectedServiceFilters,
+        setSelectedServiceFilters,
+
+        // ---------------------------------------------
+        // Service Detection
+        // ---------------------------------------------
 
         detectedService,
         setDetectedService,
@@ -287,27 +707,61 @@ export function AppProvider({ children }) {
         serviceConfidence,
         setServiceConfidence,
 
+        // ---------------------------------------------
+        // Location
+        // ---------------------------------------------
+
         userLocation,
         setUserLocation,
+
         isLocating,
+
         locationDetected,
+
         locationCoords,
+
         detectLocation,
+
+        // ---------------------------------------------
+        // Selected Service
+        // ---------------------------------------------
 
         selectedService,
         setSelectedService,
 
+        // ---------------------------------------------
+        // Selected Worker
+        // ---------------------------------------------
+
         selectedWorker,
         setSelectedWorker,
 
+        // ---------------------------------------------
+        // Customer Bookings
+        // ---------------------------------------------
+
         bookings,
+
         createBooking,
 
+        removeBooking,
+
+        // ---------------------------------------------
+        // Notifications
+        // ---------------------------------------------
+
         notifications,
+
         unreadNotificationsCount,
+
         markAllNotificationsRead,
 
+        // ---------------------------------------------
+        // User Profile
+        // ---------------------------------------------
+
         userProfile,
+
         setUserProfile
       }}
     >
@@ -317,7 +771,8 @@ export function AppProvider({ children }) {
 }
 
 export function useApp() {
-  const context = useContext(AppContext);
+  const context =
+    useContext(AppContext);
 
   if (!context) {
     throw new Error(

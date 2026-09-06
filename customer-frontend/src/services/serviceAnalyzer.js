@@ -1,82 +1,103 @@
 const SERVICE_KEYWORDS = {
   electrician: [
-    "electric",
-    "electrician",
-    "fan",
-    "switch",
-    "socket",
-    "wiring",
-    "light",
-    "bulb",
-    "power",
-    "voltage"
+    'electric',
+    'electrician',
+    'fan',
+    'switch',
+    'socket',
+    'wiring',
+    'light',
+    'bulb',
+    'power',
+    'voltage',
   ],
 
   plumber: [
-    "plumber",
-    "tap",
-    "faucet",
-    "pipe",
-    "leak",
-    "leaking",
-    "water",
-    "sink",
-    "toilet",
-    "drain"
+    'plumber',
+    'tap',
+    'faucet',
+    'pipe',
+    'leak',
+    'leaking',
+    'water',
+    'sink',
+    'toilet',
+    'drain',
   ],
 
   cleaner: [
-    "cleaner",
-    "cleaning",
-    "clean",
-    "house cleaning",
-    "room cleaning",
-    "bathroom cleaning",
-    "deep cleaning"
+    'cleaner',
+    'cleaning',
+    'clean',
+    'house cleaning',
+    'room cleaning',
+    'bathroom cleaning',
+    'deep cleaning',
   ],
 
   mechanic: [
-    "mechanic",
-    "car",
-    "bike",
-    "motorcycle",
-    "engine",
-    "brake",
-    "tyre",
-    "tire",
-    "vehicle",
-    "oil change"
+    'mechanic',
+    'car',
+    'bike',
+    'motorcycle',
+    'engine',
+    'brake',
+    'tyre',
+    'tire',
+    'vehicle',
+    'oil change',
   ],
 
   carpenter: [
-    "carpenter",
-    "wood",
-    "wooden",
-    "furniture",
-    "table",
-    "chair",
-    "door",
-    "shelf",
-    "cabinet"
+    'carpenter',
+    'wood',
+    'wooden',
+    'furniture',
+    'table',
+    'chair',
+    'door',
+    'shelf',
+    'cabinet',
   ],
 
   painter: [
-    "painter",
-    "painting",
-    "paint",
-    "wall",
-    "walls",
-    "colour",
-    "color",
-    "repaint"
-  ]
+    'painter',
+    'painting',
+    'paint',
+    'wall',
+    'walls',
+    'colour',
+    'color',
+    'repaint',
+  ],
+
+  appliances: [
+    'appliance',
+    'appliances',
+    'appliance setup',
+    'refrigerator',
+    'fridge',
+    'washing machine',
+    'microwave',
+    'oven',
+    'air conditioner',
+    'air conditioning',
+    'ac',
+    'geyser',
+    'chimney',
+    'dishwasher',
+    'mixer',
+    'grinder',
+    'television',
+    'tv',
+  ],
 };
 
 export function analyzeService(text) {
-  if (!text || typeof text !== "string") {
+  if (!text || typeof text !== 'string') {
     return {
-      service: "unknown",
-      confidence: 0
+      service: 'unknown',
+      confidence: 0,
     };
   }
 
@@ -84,8 +105,8 @@ export function analyzeService(text) {
 
   if (!input) {
     return {
-      service: "unknown",
-      confidence: 0
+      service: 'unknown',
+      confidence: 0,
     };
   }
 
@@ -111,8 +132,8 @@ export function analyzeService(text) {
 
   if (score === 0) {
     return {
-      service: "unknown",
-      confidence: 0
+      service: 'unknown',
+      confidence: 0,
     };
   }
 
@@ -120,6 +141,8 @@ export function analyzeService(text) {
 
   return {
     service,
-    confidence: Number(confidence.toFixed(2))
+    confidence: Number(confidence.toFixed(2)),
   };
 }
+
+export { SERVICE_KEYWORDS };

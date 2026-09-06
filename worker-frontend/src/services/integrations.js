@@ -27,13 +27,11 @@ import {
 
 import { auth, db } from '../firebase';
 
-
 // =================================================
 // AUTH GATEWAY
 // =================================================
 
 export const authGateway = {
-
   /**
    * Worker Login
    */
@@ -91,7 +89,6 @@ export const authGateway = {
       );
 
       switch (error.code) {
-
         case 'auth/invalid-credential':
           throw new Error(
             'Invalid email or password.'
@@ -121,12 +118,10 @@ export const authGateway = {
     }
   },
 
-
   /**
    * Worker Registration
    */
   async registerWorker(registrationData) {
-
     const {
       email,
       password,
@@ -161,7 +156,6 @@ export const authGateway = {
     }
 
     try {
-
       const userCredential =
         await createUserWithEmailAndPassword(
           auth,
@@ -215,7 +209,6 @@ export const authGateway = {
             .toISOString(),
       };
 
-
       await setDoc(
         doc(
           db,
@@ -225,21 +218,18 @@ export const authGateway = {
         newWorker
       );
 
-
       return {
         success: true,
         worker: newWorker,
       };
 
     } catch (error) {
-
       console.error(
         'Worker registration error:',
         error
       );
 
       switch (error.code) {
-
         case 'auth/email-already-in-use':
           throw new Error(
             'An account already exists with this email.'
@@ -264,12 +254,10 @@ export const authGateway = {
     }
   },
 
-
   /**
    * Get Current Worker
    */
   async getCurrentWorker() {
-
     const user =
       auth.currentUser;
 
@@ -278,7 +266,6 @@ export const authGateway = {
     }
 
     try {
-
       const workerRef =
         doc(
           db,
@@ -287,9 +274,7 @@ export const authGateway = {
         );
 
       const workerSnap =
-        await getDoc(
-          workerRef
-        );
+        await getDoc(workerRef);
 
       if (!workerSnap.exists()) {
         return null;
@@ -301,7 +286,6 @@ export const authGateway = {
       };
 
     } catch (error) {
-
       console.error(
         'Get current worker error:',
         error
@@ -311,14 +295,11 @@ export const authGateway = {
     }
   },
 
-
   /**
    * Logout
    */
   async logout() {
-
     try {
-
       await signOut(auth);
 
       return {
@@ -326,7 +307,6 @@ export const authGateway = {
       };
 
     } catch (error) {
-
       console.error(
         'Logout error:',
         error
@@ -339,12 +319,10 @@ export const authGateway = {
     }
   },
 
-
   /**
    * Auth State Listener
    */
   onAuthStateChanged(callback) {
-
     return onAuthStateChanged(
       auth,
       callback
@@ -358,13 +336,10 @@ export const authGateway = {
 // =================================================
 
 export const workerGateway = {
-
-
   /**
    * Get Worker Profile
    */
   async getProfile() {
-
     const user =
       auth.currentUser;
 
@@ -382,9 +357,7 @@ export const workerGateway = {
       );
 
     const workerSnap =
-      await getDoc(
-        workerRef
-      );
+      await getDoc(workerRef);
 
     if (!workerSnap.exists()) {
       throw new Error(
@@ -398,12 +371,10 @@ export const workerGateway = {
     };
   },
 
-
   /**
    * Update Worker Profile
    */
   async updateProfile(updates) {
-
     const user =
       auth.currentUser;
 
@@ -414,7 +385,6 @@ export const workerGateway = {
     }
 
     try {
-
       const workerRef =
         doc(
           db,
@@ -443,7 +413,6 @@ export const workerGateway = {
       };
 
     } catch (error) {
-
       console.error(
         'Update profile error:',
         error
@@ -456,12 +425,10 @@ export const workerGateway = {
     }
   },
 
-
   /**
    * Worker Availability
    */
   async setAvailability(isAvailable) {
-
     const user =
       auth.currentUser;
 
@@ -495,12 +462,10 @@ export const workerGateway = {
     };
   },
 
-
   /**
    * Worker Settings
    */
   async getSettings() {
-
     const worker =
       await this.getProfile();
 
@@ -518,12 +483,10 @@ export const workerGateway = {
     };
   },
 
-
   /**
    * Update Settings
    */
   async updateSettings(settings) {
-
     return {
       success: true,
       settings,
@@ -538,30 +501,55 @@ export const workerGateway = {
 // =================================================
 
 export const bookingsGateway = {
-
-
   /**
-   * Get all available bookings
+   * Get bookings for the logged-in worker
+   *
+   * Available Jobs includes:
+   *
+   * 1. Pending/open bookings assigned to this worker.
+   * 2. Pending/open bookings with no worker assigned.
+   *
+   * Bookings assigned to another worker are excluded.
    */
   async getAvailableBookings() {
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'Please login first.'
+      );
+    }
+
+    console.log(
+      '[SkillBridge] Worker UID:',
+      user.uid
+    );
 
     try {
-
       const bookingsRef =
         collection(
           db,
           'bookings'
         );
 
+      // -------------------------------------------------
+      // Load all bookings.
+      // -------------------------------------------------
+
       const snapshot =
         await getDocs(
           bookingsRef
         );
 
+      console.log(
+        '[SkillBridge] Total Firestore bookings:',
+        snapshot.size
+      );
+
       const bookings =
         snapshot.docs.map(
           (document) => {
-
             const data =
               document.data();
 
@@ -577,25 +565,105 @@ export const bookingsGateway = {
                       .toDate()
                       .toISOString()
                   : data.createdAt,
+
+              updatedAt:
+                data.updatedAt?.toDate
+                  ? data.updatedAt
+                      .toDate()
+                      .toISOString()
+                  : data.updatedAt,
             };
           }
         );
 
-
-      return bookings.filter(
-        (booking) =>
-          !booking.workerId &&
-          (
-            !booking.status ||
-            booking.status === 'open' ||
-            booking.status === 'pending'
-          )
+      console.log(
+        '[SkillBridge] All Firestore bookings:',
+        bookings
       );
 
-    } catch (error) {
+console.table(
+  bookings.map((booking) => ({
+    id: booking.id,
+    status: booking.status,
+    statusLabel: booking.statusLabel,
+    workerId: booking.workerId,
+    workerName: booking.workerName,
+    currentWorkerId: user.uid,
+    workerIdMatches: booking.workerId === user.uid,
+  }))
+);
 
+      // -------------------------------------------------
+      // Filter bookings for this worker.
+      // -------------------------------------------------
+
+      const availableBookings =
+        bookings.filter(
+          (booking) => {
+            const status =
+              booking.status ||
+              'pending';
+
+            const isActiveStatus =
+              status === 'pending' ||
+              status === 'open';
+
+            if (!isActiveStatus) {
+              return false;
+            }
+
+            // No worker assigned yet.
+            if (!booking.workerId) {
+              return true;
+            }
+
+            // Booking assigned to this worker.
+            if (
+              booking.workerId ===
+              user.uid
+            ) {
+              return true;
+            }
+
+            // Assigned to somebody else.
+            return false;
+          }
+        );
+
+      // -------------------------------------------------
+      // Sort newest first.
+      // -------------------------------------------------
+
+      availableBookings.sort(
+        (a, b) => {
+          const timeA =
+            a.createdAt
+              ? new Date(
+                  a.createdAt
+                ).getTime()
+              : 0;
+
+          const timeB =
+            b.createdAt
+              ? new Date(
+                  b.createdAt
+                ).getTime()
+              : 0;
+
+          return timeB - timeA;
+        }
+      );
+
+      console.log(
+        '[SkillBridge] Available worker bookings:',
+        availableBookings
+      );
+
+      return availableBookings;
+
+    } catch (error) {
       console.error(
-        'Get available bookings error:',
+        '[SkillBridge] Get available bookings error:',
         error
       );
 
@@ -606,12 +674,10 @@ export const bookingsGateway = {
     }
   },
 
-
   /**
    * Get Single Booking
    */
   async getBooking(bookingId) {
-
     if (!bookingId) {
       throw new Error(
         'Booking ID is required.'
@@ -619,7 +685,6 @@ export const bookingsGateway = {
     }
 
     try {
-
       const bookingRef =
         doc(
           db,
@@ -661,7 +726,6 @@ export const bookingsGateway = {
       };
 
     } catch (error) {
-
       console.error(
         'Get booking error:',
         error
@@ -674,15 +738,12 @@ export const bookingsGateway = {
     }
   },
 
-
   /**
    * Add Booking Request
    * Mainly for Customer Side
    */
   async addBookingRequest(bookingData) {
-
     try {
-
       const bookingRef =
         doc(
           collection(
@@ -692,7 +753,6 @@ export const bookingsGateway = {
         );
 
       const booking = {
-
         ...bookingData,
 
         status:
@@ -708,12 +768,10 @@ export const bookingsGateway = {
           serverTimestamp(),
       };
 
-
       await setDoc(
         bookingRef,
         booking
       );
-
 
       return {
         success: true,
@@ -727,7 +785,6 @@ export const bookingsGateway = {
       };
 
     } catch (error) {
-
       console.error(
         'Add booking error:',
         error
@@ -740,12 +797,10 @@ export const bookingsGateway = {
     }
   },
 
-
   /**
    * Worker Accept Booking
    */
   async acceptBooking(bookingId) {
-
     const user =
       auth.currentUser;
 
@@ -756,7 +811,6 @@ export const bookingsGateway = {
     }
 
     try {
-
       const bookingRef =
         doc(
           db,
@@ -775,20 +829,18 @@ export const bookingsGateway = {
         );
       }
 
-
       const bookingData =
         bookingSnap.data();
 
-
       if (
         bookingData.workerId &&
-        bookingData.workerId !== user.uid
+        bookingData.workerId !==
+          user.uid
       ) {
         throw new Error(
           'This booking has already been accepted by another worker.'
         );
       }
-
 
       await updateDoc(
         bookingRef,
@@ -807,12 +859,10 @@ export const bookingsGateway = {
         }
       );
 
-
       const updatedBooking =
         await this.getBooking(
           bookingId
         );
-
 
       return {
         success: true,
@@ -822,7 +872,6 @@ export const bookingsGateway = {
       };
 
     } catch (error) {
-
       console.error(
         'Accept booking error:',
         error
@@ -835,14 +884,11 @@ export const bookingsGateway = {
     }
   },
 
-
   /**
    * Reject Booking
    */
   async rejectBooking(bookingId) {
-
     try {
-
       const bookingRef =
         doc(
           db,
@@ -864,13 +910,11 @@ export const bookingsGateway = {
         }
       );
 
-
       return {
         success: true,
       };
 
     } catch (error) {
-
       console.error(
         'Reject booking error:',
         error
@@ -883,12 +927,10 @@ export const bookingsGateway = {
     }
   },
 
-
   /**
    * Get Logged-in Worker's Bookings
    */
   async getMyBookings() {
-
     const user =
       auth.currentUser;
 
@@ -899,13 +941,11 @@ export const bookingsGateway = {
     }
 
     try {
-
       const bookingsRef =
         collection(
           db,
           'bookings'
         );
-
 
       const q =
         query(
@@ -917,16 +957,13 @@ export const bookingsGateway = {
           )
         );
 
-
       const snapshot =
         await getDocs(
           q
         );
 
-
       return snapshot.docs.map(
         (document) => {
-
           const data =
             document.data();
 
@@ -954,7 +991,6 @@ export const bookingsGateway = {
       );
 
     } catch (error) {
-
       console.error(
         'Get my bookings error:',
         error
@@ -967,7 +1003,6 @@ export const bookingsGateway = {
     }
   },
 
-
   /**
    * Update Booking Status
    */
@@ -975,7 +1010,6 @@ export const bookingsGateway = {
     bookingId,
     newStatus
   ) {
-
     const user =
       auth.currentUser;
 
@@ -986,7 +1020,6 @@ export const bookingsGateway = {
     }
 
     try {
-
       const bookingRef =
         doc(
           db,
@@ -994,12 +1027,10 @@ export const bookingsGateway = {
           bookingId
         );
 
-
       const bookingSnap =
         await getDoc(
           bookingRef
         );
-
 
       if (!bookingSnap.exists()) {
         throw new Error(
@@ -1007,10 +1038,8 @@ export const bookingsGateway = {
         );
       }
 
-
       const bookingData =
         bookingSnap.data();
-
 
       if (
         bookingData.workerId !==
@@ -1021,9 +1050,7 @@ export const bookingsGateway = {
         );
       }
 
-
       const updateData = {
-
         status:
           newStatus,
 
@@ -1031,22 +1058,18 @@ export const bookingsGateway = {
           serverTimestamp(),
       };
 
-
       if (
         newStatus ===
         'in_progress'
       ) {
-
         updateData.startedAt =
           serverTimestamp();
       }
-
 
       if (
         newStatus ===
         'completed'
       ) {
-
         updateData.completedAt =
           serverTimestamp();
 
@@ -1057,17 +1080,14 @@ export const bookingsGateway = {
             user.uid
           );
 
-
         const workerSnap =
           await getDoc(
             workerRef
           );
 
-
         if (
           workerSnap.exists()
         ) {
-
           const workerData =
             workerSnap.data();
 
@@ -1076,7 +1096,6 @@ export const bookingsGateway = {
               workerData.completedJobsCount ||
               0
             );
-
 
           await updateDoc(
             workerRef,
@@ -1091,18 +1110,15 @@ export const bookingsGateway = {
         }
       }
 
-
       await updateDoc(
         bookingRef,
         updateData
       );
 
-
       const updatedBooking =
         await this.getBooking(
           bookingId
         );
-
 
       return {
         success: true,
@@ -1112,7 +1128,6 @@ export const bookingsGateway = {
       };
 
     } catch (error) {
-
       console.error(
         'Update booking status error:',
         error
@@ -1133,13 +1148,20 @@ export const bookingsGateway = {
 // =================================================
 
 export const notificationsGateway = {
-
-
   /**
-   * Get logged-in worker notifications
+   * Get logged-in worker notifications.
+   *
+   * IMPORTANT:
+   * Only notifications connected to a currently
+   * available job are returned.
+   *
+   * Rules:
+   * - Notification must be a booking request.
+   * - Notification must have a bookingId.
+   * - The booking must still be available.
+   * - Only one notification is shown per booking.
    */
   async getNotifications() {
-
     const user =
       auth.currentUser;
 
@@ -1150,7 +1172,25 @@ export const notificationsGateway = {
     }
 
     try {
+      // ---------------------------------------------
+      // Get the worker's current available jobs.
+      // ---------------------------------------------
+      const availableBookings =
+        await bookingsGateway.getAvailableBookings();
 
+      const availableBookingIds =
+        new Set(
+          availableBookings
+            .map(
+              (booking) =>
+                booking.id
+            )
+            .filter(Boolean)
+        );
+
+      // ---------------------------------------------
+      // Get notifications for this worker.
+      // ---------------------------------------------
       const notificationsRef =
         collection(
           db,
@@ -1170,36 +1210,48 @@ export const notificationsGateway = {
       const snapshot =
         await getDocs(q);
 
-
       const notifications =
-        snapshot.docs.map(
-          (document) => {
+        snapshot.docs
+          .map(
+            (document) => {
+              const data =
+                document.data();
 
-            const data =
-              document.data();
+              return {
+                id:
+                  document.id,
 
-            return {
-              id:
-                document.id,
+                ...data,
 
-              ...data,
+                timestamp:
+                  data.createdAt?.toDate
+                    ? data.createdAt
+                        .toDate()
+                        .toLocaleString()
+                    : data.timestamp ||
+                      'Just now',
+              };
+            }
+          )
 
-              timestamp:
-                data.createdAt?.toDate
-                  ? data.createdAt
-                      .toDate()
-                      .toLocaleString()
-                  : data.timestamp ||
-                    'Just now',
-            };
-          }
-        );
+          // -----------------------------------------
+          // Only show active Available Jobs.
+          // -----------------------------------------
+          .filter(
+            (notification) =>
+              notification.type ===
+                'booking_request' &&
+              notification.bookingId &&
+              availableBookingIds.has(
+                notification.bookingId
+              )
+          );
 
-
-      // Newest notifications first
+      // ---------------------------------------------
+      // Newest notifications first.
+      // ---------------------------------------------
       notifications.sort(
         (a, b) => {
-
           const aTime =
             a.createdAt?.toMillis
               ? a.createdAt.toMillis()
@@ -1214,11 +1266,35 @@ export const notificationsGateway = {
         }
       );
 
+      // ---------------------------------------------
+      // Remove duplicate notifications for the
+      // same booking. Keep the newest one.
+      // ---------------------------------------------
+      const seenBookingIds =
+        new Set();
 
-      return notifications;
+      const uniqueNotifications =
+        notifications.filter(
+          (notification) => {
+            if (
+              seenBookingIds.has(
+                notification.bookingId
+              )
+            ) {
+              return false;
+            }
+
+            seenBookingIds.add(
+              notification.bookingId
+            );
+
+            return true;
+          }
+        );
+
+      return uniqueNotifications;
 
     } catch (error) {
-
       console.error(
         'Get notifications error:',
         error
@@ -1231,16 +1307,13 @@ export const notificationsGateway = {
     }
   },
 
-
   /**
    * Add notification
    */
   async addNotification(
     notificationData
   ) {
-
     try {
-
       const notificationRef =
         doc(
           collection(
@@ -1249,9 +1322,7 @@ export const notificationsGateway = {
           )
         );
 
-
       const notification = {
-
         ...notificationData,
 
         isRead:
@@ -1264,18 +1335,15 @@ export const notificationsGateway = {
           serverTimestamp(),
       };
 
-
       await setDoc(
         notificationRef,
         notification
       );
 
-
       return {
         success: true,
 
         notification: {
-
           id:
             notificationRef.id,
 
@@ -1284,7 +1352,6 @@ export const notificationsGateway = {
       };
 
     } catch (error) {
-
       console.error(
         'Add notification error:',
         error
@@ -1297,14 +1364,12 @@ export const notificationsGateway = {
     }
   },
 
-
   /**
    * Mark one notification as read
    */
   async markAsRead(
     notificationId
   ) {
-
     if (!notificationId) {
       throw new Error(
         'Notification ID is required.'
@@ -1312,14 +1377,12 @@ export const notificationsGateway = {
     }
 
     try {
-
       const notificationRef =
         doc(
           db,
           'notifications',
           notificationId
         );
-
 
       await updateDoc(
         notificationRef,
@@ -1332,13 +1395,11 @@ export const notificationsGateway = {
         }
       );
 
-
       return {
         success: true,
       };
 
     } catch (error) {
-
       console.error(
         'Mark notification as read error:',
         error
@@ -1351,12 +1412,10 @@ export const notificationsGateway = {
     }
   },
 
-
   /**
    * Mark all notifications as read
    */
   async markAllAsRead() {
-
     const user =
       auth.currentUser;
 
@@ -1367,22 +1426,22 @@ export const notificationsGateway = {
     }
 
     try {
-
       const notificationsRef =
         collection(
           db,
           'notifications'
         );
 
-
       const q =
         query(
           notificationsRef,
+
           where(
             'workerId',
             '==',
             user.uid
           ),
+
           where(
             'isRead',
             '==',
@@ -1390,16 +1449,13 @@ export const notificationsGateway = {
           )
         );
 
-
       const snapshot =
         await getDocs(q);
-
 
       for (
         const notificationDoc
         of snapshot.docs
       ) {
-
         await updateDoc(
           notificationDoc.ref,
           {
@@ -1412,13 +1468,11 @@ export const notificationsGateway = {
         );
       }
 
-
       return {
         success: true,
       };
 
     } catch (error) {
-
       console.error(
         'Mark all notifications as read error:',
         error
@@ -1435,25 +1489,305 @@ export const notificationsGateway = {
 
 // =================================================
 // EARNINGS GATEWAY
+// FIRESTORE
 // =================================================
 
 export const earningsGateway = {
-
+  /**
+   * Get earnings from completed bookings
+   */
   async getEarningsSummary() {
+    const user = auth.currentUser;
 
-    return {
-      totalEarnings: 0,
-      thisMonth: 0,
-      pendingPayouts: 0,
-      completedJobsCount: 0,
-      transactions: [],
-      monthlyBreakdown: [],
-    };
+    if (!user) {
+      throw new Error(
+        'Please login first.'
+      );
+    }
+
+    try {
+      const bookingsRef =
+        collection(
+          db,
+          'bookings'
+        );
+
+      const q =
+        query(
+          bookingsRef,
+          where(
+            'workerId',
+            '==',
+            user.uid
+          )
+        );
+
+      const snapshot =
+        await getDocs(q);
+
+      const completedBookings =
+        snapshot.docs
+          .map((document) => {
+            const data =
+              document.data();
+
+            return {
+              id:
+                document.id,
+
+              ...data,
+
+              completedAt:
+                data.completedAt?.toDate
+                  ? data.completedAt
+                      .toDate()
+                  : data.completedAt,
+
+              createdAt:
+                data.createdAt?.toDate
+                  ? data.createdAt
+                      .toDate()
+                  : data.createdAt,
+            };
+          })
+          .filter(
+            (booking) =>
+              booking.status ===
+              'completed'
+          );
+
+      // ---------------------------------------------
+      // Calculate total earnings
+      // ---------------------------------------------
+
+      const totalEarnings =
+        completedBookings.reduce(
+          (total, booking) => {
+            const amount =
+              Number(
+                booking.estimatedPayout ??
+                booking.amount ??
+                0
+              );
+
+            return total + amount;
+          },
+          0
+        );
+
+      // ---------------------------------------------
+      // Calculate this month's earnings
+      // ---------------------------------------------
+
+      const now =
+        new Date();
+
+      const thisMonth =
+        completedBookings.reduce(
+          (total, booking) => {
+            const completedDate =
+              booking.completedAt
+                ? new Date(
+                    booking.completedAt
+                  )
+                : null;
+
+            if (
+              !completedDate ||
+              Number.isNaN(
+                completedDate.getTime()
+              )
+            ) {
+              return total;
+            }
+
+            if (
+              completedDate.getMonth() !==
+                now.getMonth() ||
+              completedDate.getFullYear() !==
+                now.getFullYear()
+            ) {
+              return total;
+            }
+
+            return (
+              total +
+              Number(
+                booking.estimatedPayout ??
+                booking.amount ??
+                0
+              )
+            );
+          },
+          0
+        );
+
+      // ---------------------------------------------
+      // Build transaction history
+      // ---------------------------------------------
+
+      const transactions =
+        completedBookings
+          .map((booking) => ({
+            id:
+              `tx-${booking.id}`,
+
+            bookingId:
+              booking.id,
+
+            serviceTitle:
+              booking.title ||
+              booking.serviceName ||
+              booking.serviceCategory ||
+              'Service Request',
+
+            customerName:
+              booking.customerName ||
+              'Customer',
+
+            date:
+              booking.completedAt
+                ? new Date(
+                    booking.completedAt
+                  )
+                    .toISOString()
+                    .split('T')[0]
+                : new Date()
+                    .toISOString()
+                    .split('T')[0],
+
+            completedAt:
+              booking.completedAt,
+
+            amount:
+              Number(
+                booking.estimatedPayout ??
+                booking.amount ??
+                0
+              ),
+
+            status:
+              'settled',
+          }))
+          .sort(
+            (a, b) =>
+              new Date(
+                b.completedAt || b.date
+              ).getTime() -
+              new Date(
+                a.completedAt || a.date
+              ).getTime()
+          );
+
+      // ---------------------------------------------
+      // Build monthly breakdown
+      // Last 6 months including current month
+      // ---------------------------------------------
+
+      const monthlyBreakdown = [];
+
+      for (
+        let i = 5;
+        i >= 0;
+        i--
+      ) {
+        const date =
+          new Date(
+            now.getFullYear(),
+            now.getMonth() - i,
+            1
+          );
+
+        const monthAmount =
+          completedBookings.reduce(
+            (total, booking) => {
+              const completedDate =
+                booking.completedAt
+                  ? new Date(
+                      booking.completedAt
+                    )
+                  : null;
+
+              if (
+                !completedDate ||
+                Number.isNaN(
+                  completedDate.getTime()
+                )
+              ) {
+                return total;
+              }
+
+              if (
+                completedDate.getMonth() !==
+                  date.getMonth() ||
+                completedDate.getFullYear() !==
+                  date.getFullYear()
+              ) {
+                return total;
+              }
+
+              return (
+                total +
+                Number(
+                  booking.estimatedPayout ??
+                  booking.amount ??
+                  0
+                )
+              );
+            },
+            0
+          );
+
+        monthlyBreakdown.push({
+          month:
+            date.toLocaleString(
+              'en-US',
+              {
+                month: 'short',
+              }
+            ),
+
+          amount:
+            monthAmount,
+        });
+      }
+
+      return {
+        totalEarnings,
+        thisMonth,
+
+        // Completed jobs are already treated
+        // as settled earnings.
+        pendingPayouts: 0,
+
+        completedJobsCount:
+          completedBookings.length,
+
+        transactions,
+
+        monthlyBreakdown,
+      };
+
+    } catch (error) {
+      console.error(
+        'Get earnings summary error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to load earnings.'
+      );
+    }
   },
 
-
+  /**
+   * Get completed booking transactions
+   */
   async getTransactions() {
+    const summary =
+      await this.getEarningsSummary();
 
-    return [];
+    return summary.transactions;
   },
 };
