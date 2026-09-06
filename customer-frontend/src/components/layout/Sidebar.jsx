@@ -142,7 +142,7 @@ export function Sidebar({ className = '' }) {
         {/* Earn as Worker */}
         <button
           onClick={() => {
-            window.location.href = 'https://skillbridge-worker.web.app/login';
+            window.location.href = '/worker/';
           }}
           className="w-full flex items-center justify-between p-3 rounded-2xl bg-slate-100 dark:bg-slate-800/70 hover:bg-slate-200/80 dark:hover:bg-slate-800 transition-colors text-left group"
         >

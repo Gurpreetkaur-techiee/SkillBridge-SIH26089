@@ -37,7 +37,7 @@ export default function App() {
   return (
     <AppProvider>
       <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter basename="/worker">
           <Routes>
             {/* Public Auth Routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -52,18 +52,45 @@ export default function App() {
               }
             >
               <Route index element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
-              <Route path="/available-jobs" element={<AvailableBookingsPage />} />
-              <Route path="/booking/:id" element={<BookingDetailsPage />} />
-              <Route path="/my-bookings" element={<MyBookingsPage />} />
-              <Route path="/notifications" element={<NotificationsPage />} />
-              <Route path="/earnings" element={<EarningsPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route
+                path="/dashboard"
+                element={<DashboardPage />}
+              />
+              <Route
+                path="/available-jobs"
+                element={<AvailableBookingsPage />}
+              />
+              <Route
+                path="/booking/:id"
+                element={<BookingDetailsPage />}
+              />
+              <Route
+                path="/my-bookings"
+                element={<MyBookingsPage />}
+              />
+              <Route
+                path="/notifications"
+                element={<NotificationsPage />}
+              />
+              <Route
+                path="/earnings"
+                element={<EarningsPage />}
+              />
+              <Route
+                path="/profile"
+                element={<ProfilePage />}
+              />
+              <Route
+                path="/settings"
+                element={<SettingsPage />}
+              />
             </Route>
 
             {/* Fallback */}
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route
+              path="*"
+              element={<Navigate to="/dashboard" replace />}
+            />
           </Routes>
         </BrowserRouter>
       </AuthProvider>

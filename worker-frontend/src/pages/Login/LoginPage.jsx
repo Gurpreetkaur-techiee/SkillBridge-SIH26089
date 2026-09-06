@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Wrench, Mail, Lock, ArrowRight, Sparkles } from 'lucide-react';
+import { Wrench, Mail, Lock, ArrowRight } from 'lucide-react';
 import Input from '../../components/Common/Input';
 import Button from '../../components/Common/Button';
 import Card from '../../components/Common/Card';
@@ -13,15 +13,18 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('rajesh.kumar@skillbridge.pro');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) {
+
+    const cleanEmail = email.trim();
+
+    if (!cleanEmail || !password) {
       setError('Please enter your email and password.');
       return;
     }
@@ -29,27 +32,15 @@ export default function LoginPage() {
     try {
       setIsLoading(true);
       setError('');
-      await login(email, password, rememberMe);
-      showToast('Successfully logged in!', 'success');
-      navigate('/dashboard');
-    } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
-  const handleDemoLogin = async () => {
-    setEmail('rajesh.kumar@skillbridge.pro');
-    setPassword('password123');
-    try {
-      setIsLoading(true);
-      setError('');
-      await login('rajesh.kumar@skillbridge.pro', 'password123', true);
+      await login(cleanEmail, password, rememberMe);
+
       showToast('Successfully logged in!', 'success');
       navigate('/dashboard');
     } catch (err) {
-      setError(err.message || 'Demo login failed.');
+      setError(
+        err.message || 'Login failed. Please check your credentials.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -63,6 +54,7 @@ export default function LoginPage() {
           <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/25">
             <Wrench className="w-5 h-5" />
           </div>
+
           <span className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
             SkillBridge
           </span>
@@ -80,9 +72,11 @@ export default function LoginPage() {
             <span className="px-3 py-1 text-xs font-bold rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-900 uppercase tracking-wider mb-3 inline-block">
               Worker Portal
             </span>
+
             <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Worker Login
             </h1>
+
             <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
               Welcome back! Sign in to access your jobs, schedule, and earnings.
             </p>
@@ -128,7 +122,12 @@ export default function LoginPage() {
 
               <button
                 type="button"
-                onClick={() => showToast('Password reset link sent to your registered email.', 'info')}
+                onClick={() =>
+                  showToast(
+                    'Password reset feature is available through your registered account.',
+                    'info'
+                  )
+                }
                 className="font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
               >
                 Forgot password?
@@ -146,19 +145,6 @@ export default function LoginPage() {
                 iconPosition="right"
               >
                 Sign In to Portal
-              </Button>
-            </div>
-
-            <div className="pt-1">
-              <Button
-                type="button"
-                variant="outline"
-                size="md"
-                onClick={handleDemoLogin}
-                className="w-full text-xs font-semibold"
-                icon={Sparkles}
-              >
-                Quick Demo Access
               </Button>
             </div>
           </form>

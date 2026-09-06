@@ -36,7 +36,7 @@ export function AuthProvider({ children }) {
     setAuthError(null);
   };
 
-  // Create/update customer document in Firestore
+  // Create or update the customer document in Firestore.
   const createUserDocument = async (user, displayName = '') => {
     if (!user) return;
 
@@ -75,38 +75,47 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Listen for Firebase authentication state
+  // Listen for Firebase authentication state.
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      try {
-        if (user) {
-          await createUserDocument(user);
+      if (user) {
+        // Set the authenticated user immediately.
+        // This prevents the Customer UI from temporarily
+        // showing Guest Mode while Firestore is syncing.
+        setCurrentUser({
+          uid: user.uid,
+          email: user.email,
+          displayName:
+            user.displayName ||
+            user.email?.split('@')[0] ||
+            'Customer',
+          photoURL: user.photoURL || null,
+          emailVerified: user.emailVerified,
+          isAnonymous: user.isAnonymous,
+        });
 
-          setCurrentUser({
-            uid: user.uid,
-            email: user.email,
-            displayName:
-              user.displayName ||
-              user.email?.split('@')[0] ||
-              'Customer',
-            photoURL: user.photoURL || null,
-            emailVerified: user.emailVerified,
-            isAnonymous: user.isAnonymous,
-          });
-        } else {
-          setCurrentUser(null);
+        // Keep Firestore synchronization separate.
+        // A Firestore sync problem should not make the
+        // authenticated user appear as a guest.
+        try {
+          await createUserDocument(user);
+        } catch (syncError) {
+          console.error(
+            'Error syncing user with Firestore:',
+            syncError
+          );
         }
-      } catch (error) {
-        console.error('Error syncing user with Firestore:', error);
-      } finally {
-        setLoading(false);
+      } else {
+        setCurrentUser(null);
       }
+
+      setLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
-  // Create Firebase account + Firestore user document
+  // Create Firebase account + Firestore user document.
   const signup = async (email, password, displayName = '') => {
     setAuthError(null);
 
@@ -152,7 +161,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Login with Firebase email/password
+  // Login with Firebase email/password.
   const login = async (email, password) => {
     setAuthError(null);
 
@@ -165,8 +174,7 @@ export function AuthProvider({ children }) {
 
       const user = userCredential.user;
 
-      await createUserDocument(user);
-
+      // Set the authenticated user immediately.
       setCurrentUser({
         uid: user.uid,
         email: user.email,
@@ -178,6 +186,17 @@ export function AuthProvider({ children }) {
         emailVerified: user.emailVerified,
         isAnonymous: user.isAnonymous,
       });
+
+      // Sync Firestore without allowing a sync failure
+      // to make the UI think the user is logged out.
+      try {
+        await createUserDocument(user);
+      } catch (syncError) {
+        console.error(
+          'Error syncing logged-in user with Firestore:',
+          syncError
+        );
+      }
 
       closeAuthModal();
 
@@ -192,7 +211,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Login with Google + Firestore user document
+  // Login with Google + Firestore user document.
   const loginWithGoogle = async () => {
     setAuthError(null);
 
@@ -200,8 +219,6 @@ export function AuthProvider({ children }) {
       const result = await signInWithPopup(auth, googleProvider);
 
       const user = result.user;
-
-      await createUserDocument(user);
 
       setCurrentUser({
         uid: user.uid,
@@ -214,6 +231,15 @@ export function AuthProvider({ children }) {
         emailVerified: user.emailVerified,
         isAnonymous: user.isAnonymous,
       });
+
+      try {
+        await createUserDocument(user);
+      } catch (syncError) {
+        console.error(
+          'Error syncing Google user with Firestore:',
+          syncError
+        );
+      }
 
       closeAuthModal();
 
@@ -228,7 +254,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Logout
+  // Logout.
   const logout = async () => {
     setAuthError(null);
 
@@ -241,7 +267,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Password reset
+  // Password reset.
   const resetPassword = async (email) => {
     setAuthError(null);
 

@@ -4,12 +4,18 @@ import { workerGateway } from '../services/integrations';
 
 const AppContext = createContext();
 
+const THEME_STORAGE_KEY = 'skillbridge_theme';
+
 export function AppProvider({ children }) {
-  // Theme state with local storage persistence
+  // Shared theme state across all SkillBridge frontends
   const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem('skillbridge_worker_theme');
-    if (saved) return saved;
-    return 'light'; // Light mode is default as required
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+
+    if (saved === 'dark' || saved === 'light') {
+      return saved;
+    }
+
+    return 'light';
   });
 
   // Language state with local storage persistence
@@ -26,16 +32,38 @@ export function AppProvider({ children }) {
   // Toast / notification feedback
   const [toast, setToast] = useState(null);
 
-  // Apply theme class to <html> element
+  // Apply theme class and persist shared theme
   useEffect(() => {
     const root = document.documentElement;
+
     if (theme === 'dark') {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('skillbridge_worker_theme', theme);
+
+    localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  // Listen for theme changes made by another SkillBridge frontend
+  useEffect(() => {
+    const handleStorageChange = (event) => {
+      if (
+        event.key !== THEME_STORAGE_KEY ||
+        (event.newValue !== 'dark' && event.newValue !== 'light')
+      ) {
+        return;
+      }
+
+      setTheme(event.newValue);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   // Persist language selection
   useEffect(() => {
@@ -102,6 +130,7 @@ export function AppProvider({ children }) {
       }}
     >
       {children}
+
       {/* Global Toast Notification */}
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 max-w-md animate-in fade-in slide-in-from-bottom-5 duration-200">
@@ -115,6 +144,7 @@ export function AppProvider({ children }) {
             }`}
           >
             <span>{toast.message}</span>
+
             <button
               onClick={hideToast}
               className="ml-auto text-xs opacity-70 hover:opacity-100 p-1 font-bold"
@@ -131,8 +161,10 @@ export function AppProvider({ children }) {
 
 export function useApp() {
   const context = useContext(AppContext);
+
   if (!context) {
     throw new Error('useApp must be used within an AppProvider');
   }
+
   return context;
 }
