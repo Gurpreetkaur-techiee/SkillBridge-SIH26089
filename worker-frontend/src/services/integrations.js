@@ -19,6 +19,7 @@ import {
   getDoc,
   getDocs,
   updateDoc,
+  deleteDoc,
   collection,
   query,
   where,
@@ -26,6 +27,7 @@ import {
 } from 'firebase/firestore';
 
 import { auth, db } from '../firebase';
+
 
 // =================================================
 // AUTH GATEWAY
@@ -57,7 +59,8 @@ export const authGateway = {
           password
         );
 
-      const user = userCredential.user;
+      const user =
+        userCredential.user;
 
       const workerRef = doc(
         db,
@@ -76,6 +79,7 @@ export const authGateway = {
 
       return {
         success: true,
+
         worker: {
           id: user.uid,
           ...workerSnap.data(),
@@ -117,6 +121,7 @@ export const authGateway = {
       }
     }
   },
+
 
   /**
    * Worker Registration
@@ -218,8 +223,33 @@ export const authGateway = {
         newWorker
       );
 
+
+      // ---------------------------------------------
+      // Create welcome system notification.
+      // ---------------------------------------------
+
+      await notificationsGateway
+        .addNotification({
+          workerId:
+            user.uid,
+
+          type:
+            'system',
+
+          title:
+            'Welcome to SkillBridge',
+
+          message:
+            `Welcome ${fullName}! Your worker account has been created successfully.`,
+
+          isRead:
+            false,
+        });
+
+
       return {
         success: true,
+
         worker: newWorker,
       };
 
@@ -253,6 +283,7 @@ export const authGateway = {
       }
     }
   },
+
 
   /**
    * Get Current Worker
@@ -295,6 +326,7 @@ export const authGateway = {
     }
   },
 
+
   /**
    * Logout
    */
@@ -318,6 +350,7 @@ export const authGateway = {
       );
     }
   },
+
 
   /**
    * Auth State Listener
@@ -371,6 +404,7 @@ export const workerGateway = {
     };
   },
 
+
   /**
    * Update Worker Profile
    */
@@ -403,11 +437,33 @@ export const workerGateway = {
         }
       );
 
+
+      // ---------------------------------------------
+      // Create profile updated system notification.
+      // ---------------------------------------------
+
+      await notificationsGateway
+        .addNotification({
+          workerId:
+            user.uid,
+
+          type:
+            'system',
+
+          title:
+            'Profile Updated',
+
+          message:
+            'Your worker profile has been updated successfully.',
+        });
+
+
       const updatedWorker =
         await this.getProfile();
 
       return {
         success: true,
+
         worker:
           updatedWorker,
       };
@@ -424,6 +480,7 @@ export const workerGateway = {
       );
     }
   },
+
 
   /**
    * Worker Availability
@@ -462,6 +519,7 @@ export const workerGateway = {
     };
   },
 
+
   /**
    * Worker Settings
    */
@@ -482,6 +540,7 @@ export const workerGateway = {
       autoAcceptNearby: false,
     };
   },
+
 
   /**
    * Update Settings
@@ -533,9 +592,9 @@ export const bookingsGateway = {
           'bookings'
         );
 
-      // -------------------------------------------------
+      // ---------------------------------------------
       // Load all bookings.
-      // -------------------------------------------------
+      // ---------------------------------------------
 
       const snapshot =
         await getDocs(
@@ -581,21 +640,35 @@ export const bookingsGateway = {
         bookings
       );
 
-console.table(
-  bookings.map((booking) => ({
-    id: booking.id,
-    status: booking.status,
-    statusLabel: booking.statusLabel,
-    workerId: booking.workerId,
-    workerName: booking.workerName,
-    currentWorkerId: user.uid,
-    workerIdMatches: booking.workerId === user.uid,
-  }))
-);
+      console.table(
+        bookings.map((booking) => ({
+          id:
+            booking.id,
 
-      // -------------------------------------------------
+          status:
+            booking.status,
+
+          statusLabel:
+            booking.statusLabel,
+
+          workerId:
+            booking.workerId,
+
+          workerName:
+            booking.workerName,
+
+          currentWorkerId:
+            user.uid,
+
+          workerIdMatches:
+            booking.workerId ===
+            user.uid,
+        }))
+      );
+
+      // ---------------------------------------------
       // Filter bookings for this worker.
-      // -------------------------------------------------
+      // ---------------------------------------------
 
       const availableBookings =
         bookings.filter(
@@ -630,9 +703,9 @@ console.table(
           }
         );
 
-      // -------------------------------------------------
+      // ---------------------------------------------
       // Sort newest first.
-      // -------------------------------------------------
+      // ---------------------------------------------
 
       availableBookings.sort(
         (a, b) => {
@@ -673,6 +746,7 @@ console.table(
       );
     }
   },
+
 
   /**
    * Get Single Booking
@@ -738,6 +812,7 @@ console.table(
     }
   },
 
+
   /**
    * Add Booking Request
    * Mainly for Customer Side
@@ -796,6 +871,7 @@ console.table(
       );
     }
   },
+
 
   /**
    * Worker Accept Booking
@@ -859,6 +935,34 @@ console.table(
         }
       );
 
+
+      // ---------------------------------------------
+      // Create booking history notification.
+      // ---------------------------------------------
+
+      await notificationsGateway
+        .addNotification({
+          workerId:
+            user.uid,
+
+          bookingId,
+
+          type:
+            'booking_accepted',
+
+          title:
+            'Booking Accepted',
+
+          message:
+            `You accepted the booking for ${
+              bookingData.serviceName ||
+              bookingData.serviceCategory ||
+              bookingData.title ||
+              'a customer'
+            }.`,
+        });
+
+
       const updatedBooking =
         await this.getBooking(
           bookingId
@@ -884,10 +988,14 @@ console.table(
     }
   },
 
+
   /**
    * Reject Booking
    */
   async rejectBooking(bookingId) {
+    const user =
+      auth.currentUser;
+
     try {
       const bookingRef =
         doc(
@@ -895,6 +1003,16 @@ console.table(
           'bookings',
           bookingId
         );
+
+      const bookingSnap =
+        await getDoc(
+          bookingRef
+        );
+
+      const bookingData =
+        bookingSnap.exists()
+          ? bookingSnap.data()
+          : {};
 
       await updateDoc(
         bookingRef,
@@ -909,6 +1027,36 @@ console.table(
             serverTimestamp(),
         }
       );
+
+
+      // ---------------------------------------------
+      // Create booking history notification.
+      // ---------------------------------------------
+
+      if (user) {
+        await notificationsGateway
+          .addNotification({
+            workerId:
+              user.uid,
+
+            bookingId,
+
+            type:
+              'booking_rejected',
+
+            title:
+              'Booking Declined',
+
+            message:
+              `You declined the booking for ${
+                bookingData.serviceName ||
+                bookingData.serviceCategory ||
+                bookingData.title ||
+                'a customer'
+              }.`,
+          });
+      }
+
 
       return {
         success: true,
@@ -926,6 +1074,7 @@ console.table(
       );
     }
   },
+
 
   /**
    * Get Logged-in Worker's Bookings
@@ -1002,6 +1151,7 @@ console.table(
       );
     }
   },
+
 
   /**
    * Update Booking Status
@@ -1115,6 +1265,72 @@ console.table(
         updateData
       );
 
+
+      // ---------------------------------------------
+      // Create notifications when job is completed.
+      // ---------------------------------------------
+
+      if (
+        newStatus ===
+        'completed'
+      ) {
+        const amount =
+          Number(
+            bookingData.estimatedPayout ??
+            bookingData.amount ??
+            0
+          );
+
+        const serviceName =
+          bookingData.serviceName ||
+          bookingData.serviceCategory ||
+          bookingData.title ||
+          'Service Request';
+
+
+        // Booking notification.
+
+        await notificationsGateway
+          .addNotification({
+            workerId:
+              user.uid,
+
+            bookingId,
+
+            type:
+              'booking_completed',
+
+            title:
+              'Job Completed',
+
+            message:
+              `You successfully completed ${serviceName}.`,
+          });
+
+
+        // Payout notification.
+
+        await notificationsGateway
+          .addNotification({
+            workerId:
+              user.uid,
+
+            bookingId,
+
+            type:
+              'payout',
+
+            title:
+              'Payment Received',
+
+            message:
+              `₹${amount.toLocaleString()} has been added to your earnings for ${serviceName}.`,
+
+            amount,
+          });
+      }
+
+
       const updatedBooking =
         await this.getBooking(
           bookingId
@@ -1152,8 +1368,10 @@ export const notificationsGateway = {
    * Get logged-in worker notifications.
    *
    * IMPORTANT:
-   * Only notifications connected to a currently
-   * available job are returned.
+   * This function is for the Header dropdown.
+   *
+   * Only notifications connected to currently
+   * available jobs are returned.
    *
    * Rules:
    * - Notification must be a booking request.
@@ -1175,8 +1393,10 @@ export const notificationsGateway = {
       // ---------------------------------------------
       // Get the worker's current available jobs.
       // ---------------------------------------------
+
       const availableBookings =
-        await bookingsGateway.getAvailableBookings();
+        await bookingsGateway
+          .getAvailableBookings();
 
       const availableBookingIds =
         new Set(
@@ -1188,9 +1408,11 @@ export const notificationsGateway = {
             .filter(Boolean)
         );
 
+
       // ---------------------------------------------
       // Get notifications for this worker.
       // ---------------------------------------------
+
       const notificationsRef =
         collection(
           db,
@@ -1210,6 +1432,7 @@ export const notificationsGateway = {
       const snapshot =
         await getDocs(q);
 
+
       const notifications =
         snapshot.docs
           .map(
@@ -1222,6 +1445,9 @@ export const notificationsGateway = {
                   document.id,
 
                 ...data,
+
+                isRead:
+                  data.isRead === true,
 
                 timestamp:
                   data.createdAt?.toDate
@@ -1237,6 +1463,7 @@ export const notificationsGateway = {
           // -----------------------------------------
           // Only show active Available Jobs.
           // -----------------------------------------
+
           .filter(
             (notification) =>
               notification.type ===
@@ -1247,9 +1474,11 @@ export const notificationsGateway = {
               )
           );
 
+
       // ---------------------------------------------
       // Newest notifications first.
       // ---------------------------------------------
+
       notifications.sort(
         (a, b) => {
           const aTime =
@@ -1266,10 +1495,12 @@ export const notificationsGateway = {
         }
       );
 
+
       // ---------------------------------------------
       // Remove duplicate notifications for the
-      // same booking. Keep the newest one.
+      // same booking.
       // ---------------------------------------------
+
       const seenBookingIds =
         new Set();
 
@@ -1306,6 +1537,381 @@ export const notificationsGateway = {
       );
     }
   },
+
+
+  /**
+   * Get complete notification history.
+   *
+   * This function is ONLY for the full
+   * Notifications page.
+   *
+   * Includes:
+   * - Booking notifications
+   * - Payout notifications
+   * - System notifications
+   * - Existing completed booking payouts
+   */
+  async getNotificationHistory() {
+    const user =
+      auth.currentUser;
+
+    if (!user) {
+      throw new Error(
+        'Please login first.'
+      );
+    }
+
+    try {
+      const notificationsRef =
+        collection(
+          db,
+          'notifications'
+        );
+
+      const q =
+        query(
+          notificationsRef,
+          where(
+            'workerId',
+            '==',
+            user.uid
+          )
+        );
+
+      const snapshot =
+        await getDocs(q);
+
+
+      // ---------------------------------------------
+      // Firebase notifications.
+      // ---------------------------------------------
+
+      const firebaseNotifications =
+        snapshot.docs.map(
+          (document) => {
+            const data =
+              document.data();
+
+            const createdAt =
+              data.createdAt?.toDate
+                ? data.createdAt.toDate()
+                : data.createdAt
+                  ? new Date(
+                      data.createdAt
+                    )
+                  : null;
+
+            return {
+              id:
+                document.id,
+
+              ...data,
+
+              isRead:
+                data.isRead === true,
+
+              createdAt,
+
+              timestamp:
+                createdAt instanceof Date &&
+                !Number.isNaN(
+                  createdAt.getTime()
+                )
+                  ? createdAt.toLocaleString()
+                  : data.timestamp ||
+                    'Just now',
+            };
+          }
+        );
+
+
+      // ---------------------------------------------
+      // Get worker bookings.
+      //
+      // Used to create payout history for completed
+      // jobs that existed before this notification
+      // system was added.
+      // ---------------------------------------------
+
+      const bookingsRef =
+        collection(
+          db,
+          'bookings'
+        );
+
+      const bookingsQuery =
+        query(
+          bookingsRef,
+          where(
+            'workerId',
+            '==',
+            user.uid
+          )
+        );
+
+      const bookingsSnapshot =
+        await getDocs(
+          bookingsQuery
+        );
+
+      const bookings =
+        bookingsSnapshot.docs.map(
+          (document) => {
+            const data =
+              document.data();
+
+            const completedAt =
+              data.completedAt?.toDate
+                ? data.completedAt.toDate()
+                : data.completedAt
+                  ? new Date(
+                      data.completedAt
+                    )
+                  : null;
+
+            return {
+              id:
+                document.id,
+
+              ...data,
+
+              completedAt,
+            };
+          }
+        );
+
+
+      // ---------------------------------------------
+      // Existing payout notification booking IDs.
+      // ---------------------------------------------
+
+      const existingPayoutBookingIds =
+        new Set(
+          firebaseNotifications
+            .filter(
+              (notification) =>
+                notification.type ===
+                  'payout' &&
+                notification.bookingId
+            )
+            .map(
+              (notification) =>
+                notification.bookingId
+            )
+        );
+
+
+      // ---------------------------------------------
+      // Create payout history for older completed
+      // bookings that do not already have a payout
+      // notification.
+      // ---------------------------------------------
+
+      const generatedPayoutNotifications =
+        bookings
+          .filter(
+            (booking) =>
+              booking.status ===
+                'completed' &&
+              !existingPayoutBookingIds.has(
+                booking.id
+              )
+          )
+          .map(
+            (booking) => {
+              const amount =
+                Number(
+                  booking.estimatedPayout ??
+                  booking.amount ??
+                  0
+                );
+
+              const completedAt =
+                booking.completedAt ||
+                new Date();
+
+              return {
+                id:
+                  `generated-payout-${booking.id}`,
+
+                workerId:
+                  user.uid,
+
+                bookingId:
+                  booking.id,
+
+                type:
+                  'payout',
+
+                title:
+                  'Payment Received',
+
+                message:
+                  `₹${amount.toLocaleString()} has been added to your earnings for ${
+                    booking.serviceName ||
+                    booking.serviceCategory ||
+                    booking.title ||
+                    'Service Request'
+                  }.`,
+
+                amount,
+
+                isRead:
+                  true,
+
+                createdAt:
+                  completedAt,
+
+                timestamp:
+                  completedAt instanceof Date
+                    ? completedAt.toLocaleString()
+                    : 'Completed',
+              };
+            }
+          );
+
+
+      // ---------------------------------------------
+      // Make sure existing workers have at least one
+      // system notification.
+      // ---------------------------------------------
+
+      const systemNotifications =
+        firebaseNotifications.filter(
+          (notification) =>
+            notification.type ===
+            'system'
+        );
+
+
+      const generatedSystemNotifications =
+        [];
+
+      if (
+        systemNotifications.length === 0
+      ) {
+        const workerRef =
+          doc(
+            db,
+            'workers',
+            user.uid
+          );
+
+        const workerSnap =
+          await getDoc(
+            workerRef
+          );
+
+        if (
+          workerSnap.exists()
+        ) {
+          const workerData =
+            workerSnap.data();
+
+          const createdAt =
+            workerData.createdAt
+              ? new Date(
+                  workerData.createdAt
+                )
+              : new Date();
+
+          generatedSystemNotifications.push({
+            id:
+              `generated-system-welcome-${user.uid}`,
+
+            workerId:
+              user.uid,
+
+            type:
+              'system',
+
+            title:
+              'Welcome to SkillBridge',
+
+            message:
+              `Welcome ${
+                workerData.fullName ||
+                'Worker'
+              }! Your SkillBridge worker account is ready.`,
+
+            isRead:
+              true,
+
+            createdAt,
+
+            timestamp:
+              createdAt instanceof Date
+                ? createdAt.toLocaleString()
+                : 'Just now',
+          });
+        }
+      }
+
+
+      // ---------------------------------------------
+      // Combine all notification history.
+      // ---------------------------------------------
+
+      const allNotifications = [
+        ...firebaseNotifications,
+
+        ...generatedPayoutNotifications,
+
+        ...generatedSystemNotifications,
+      ];
+
+
+      // ---------------------------------------------
+      // Sort newest first.
+      // ---------------------------------------------
+
+      allNotifications.sort(
+        (a, b) => {
+          const getTime =
+            (notification) => {
+              if (
+                notification.createdAt instanceof
+                Date
+              ) {
+                return notification
+                  .createdAt
+                  .getTime();
+              }
+
+              if (
+                notification.createdAt?.toMillis
+              ) {
+                return notification
+                  .createdAt
+                  .toMillis();
+              }
+
+              return 0;
+            };
+
+          return (
+            getTime(b) -
+            getTime(a)
+          );
+        }
+      );
+
+
+      return allNotifications;
+
+    } catch (error) {
+      console.error(
+        'Get notification history error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to load notification history.'
+      );
+    }
+  },
+
 
   /**
    * Add notification
@@ -1364,6 +1970,7 @@ export const notificationsGateway = {
     }
   },
 
+
   /**
    * Mark one notification as read
    */
@@ -1375,6 +1982,21 @@ export const notificationsGateway = {
         'Notification ID is required.'
       );
     }
+
+
+    // Generated notifications only exist for history
+    // and do not need Firestore updates.
+
+    if (
+      notificationId.startsWith(
+        'generated-'
+      )
+    ) {
+      return {
+        success: true,
+      };
+    }
+
 
     try {
       const notificationRef =
@@ -1411,6 +2033,7 @@ export const notificationsGateway = {
       );
     }
   },
+
 
   /**
    * Mark all notifications as read
@@ -1484,6 +2107,51 @@ export const notificationsGateway = {
       );
     }
   },
+
+
+  /**
+   * Remove notification.
+   *
+   * Used by the Header dropdown for active
+   * booking request notifications.
+   */
+  async removeNotification(
+    notificationId
+  ) {
+    if (!notificationId) {
+      throw new Error(
+        'Notification ID is required.'
+      );
+    }
+
+    try {
+      const notificationRef =
+        doc(
+          db,
+          'notifications',
+          notificationId
+        );
+
+      await deleteDoc(
+        notificationRef
+      );
+
+      return {
+        success: true,
+      };
+
+    } catch (error) {
+      console.error(
+        'Remove notification error:',
+        error
+      );
+
+      throw new Error(
+        error.message ||
+        'Failed to remove notification.'
+      );
+    }
+  },
 };
 
 
@@ -1497,7 +2165,8 @@ export const earningsGateway = {
    * Get earnings from completed bookings
    */
   async getEarningsSummary() {
-    const user = auth.currentUser;
+    const user =
+      auth.currentUser;
 
     if (!user) {
       throw new Error(
@@ -1527,34 +2196,37 @@ export const earningsGateway = {
 
       const completedBookings =
         snapshot.docs
-          .map((document) => {
-            const data =
-              document.data();
+          .map(
+            (document) => {
+              const data =
+                document.data();
 
-            return {
-              id:
-                document.id,
+              return {
+                id:
+                  document.id,
 
-              ...data,
+                ...data,
 
-              completedAt:
-                data.completedAt?.toDate
-                  ? data.completedAt
-                      .toDate()
-                  : data.completedAt,
+                completedAt:
+                  data.completedAt?.toDate
+                    ? data.completedAt
+                        .toDate()
+                    : data.completedAt,
 
-              createdAt:
-                data.createdAt?.toDate
-                  ? data.createdAt
-                      .toDate()
-                  : data.createdAt,
-            };
-          })
+                createdAt:
+                  data.createdAt?.toDate
+                    ? data.createdAt
+                        .toDate()
+                    : data.createdAt,
+              };
+            }
+          )
           .filter(
             (booking) =>
               booking.status ===
               'completed'
           );
+
 
       // ---------------------------------------------
       // Calculate total earnings
@@ -1574,6 +2246,7 @@ export const earningsGateway = {
           },
           0
         );
+
 
       // ---------------------------------------------
       // Calculate this month's earnings
@@ -1622,53 +2295,56 @@ export const earningsGateway = {
           0
         );
 
+
       // ---------------------------------------------
       // Build transaction history
       // ---------------------------------------------
 
       const transactions =
         completedBookings
-          .map((booking) => ({
-            id:
-              `tx-${booking.id}`,
+          .map(
+            (booking) => ({
+              id:
+                `tx-${booking.id}`,
 
-            bookingId:
-              booking.id,
+              bookingId:
+                booking.id,
 
-            serviceTitle:
-              booking.title ||
-              booking.serviceName ||
-              booking.serviceCategory ||
-              'Service Request',
+              serviceTitle:
+                booking.title ||
+                booking.serviceName ||
+                booking.serviceCategory ||
+                'Service Request',
 
-            customerName:
-              booking.customerName ||
-              'Customer',
+              customerName:
+                booking.customerName ||
+                'Customer',
 
-            date:
-              booking.completedAt
-                ? new Date(
-                    booking.completedAt
-                  )
-                    .toISOString()
-                    .split('T')[0]
-                : new Date()
-                    .toISOString()
-                    .split('T')[0],
+              date:
+                booking.completedAt
+                  ? new Date(
+                      booking.completedAt
+                    )
+                      .toISOString()
+                      .split('T')[0]
+                  : new Date()
+                      .toISOString()
+                      .split('T')[0],
 
-            completedAt:
-              booking.completedAt,
+              completedAt:
+                booking.completedAt,
 
-            amount:
-              Number(
-                booking.estimatedPayout ??
-                booking.amount ??
-                0
-              ),
+              amount:
+                Number(
+                  booking.estimatedPayout ??
+                  booking.amount ??
+                  0
+                ),
 
-            status:
-              'settled',
-          }))
+              status:
+                'settled',
+            })
+          )
           .sort(
             (a, b) =>
               new Date(
@@ -1678,6 +2354,7 @@ export const earningsGateway = {
                 a.completedAt || a.date
               ).getTime()
           );
+
 
       // ---------------------------------------------
       // Build monthly breakdown
@@ -1754,11 +2431,13 @@ export const earningsGateway = {
 
       return {
         totalEarnings,
+
         thisMonth,
 
         // Completed jobs are already treated
         // as settled earnings.
-        pendingPayouts: 0,
+        pendingPayouts:
+          0,
 
         completedJobsCount:
           completedBookings.length,
@@ -1780,6 +2459,7 @@ export const earningsGateway = {
       );
     }
   },
+
 
   /**
    * Get completed booking transactions

@@ -7,21 +7,17 @@ import {
   Wallet,
   Briefcase,
   ArrowRight,
-  Sparkles,
   ShieldCheck,
   AlertCircle,
-  PlusCircle,
-  TrendingUp,
-  MapPin,
-  Clock,
 } from 'lucide-react';
+
 import StatCard from '../../components/Common/StatCard';
 import Button from '../../components/Common/Button';
-import Card from '../../components/Common/Card';
 import BookingCard from '../../components/BookingCard/BookingCard';
 import EmptyState from '../../components/EmptyState/EmptyState';
 import LoadingState from '../../components/LoadingState/LoadingState';
 import ConfirmDialog from '../../components/Common/ConfirmDialog';
+
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { bookingsGateway, earningsGateway } from '../../services/integrations';
@@ -33,6 +29,7 @@ export default function DashboardPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [availableRequests, setAvailableRequests] = useState([]);
+
   const [stats, setStats] = useState({
     newRequests: 0,
     upcomingJobs: 0,
@@ -42,22 +39,30 @@ export default function DashboardPage() {
 
   // Modal confirm actions
   const [selectedBooking, setSelectedBooking] = useState(null);
-  const [actionType, setActionType] = useState(null); // 'accept' | 'reject'
+  const [actionType, setActionType] = useState(null);
   const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
+
       const [available, myBookings, earnings] = await Promise.all([
         bookingsGateway.getAvailableBookings(),
         bookingsGateway.getMyBookings(),
         earningsGateway.getEarningsSummary(),
       ]);
 
-      const upcomingCount = myBookings.filter((b) => b.status === 'accepted').length;
-      const completedCount = myBookings.filter((b) => b.status === 'completed').length || earnings.completedJobsCount || 0;
+      const upcomingCount = myBookings.filter(
+        (b) => b.status === 'accepted'
+      ).length;
+
+      const completedCount =
+        myBookings.filter((b) => b.status === 'completed').length ||
+        earnings.completedJobsCount ||
+        0;
 
       setAvailableRequests(available);
+
       setStats({
         newRequests: available.length,
         upcomingJobs: upcomingCount,
@@ -77,8 +82,15 @@ export default function DashboardPage() {
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return t('dashboard.greetingMorning');
-    if (hour < 17) return t('dashboard.greetingAfternoon');
+
+    if (hour < 12) {
+      return t('dashboard.greetingMorning');
+    }
+
+    if (hour < 17) {
+      return t('dashboard.greetingAfternoon');
+    }
+
     return t('dashboard.greetingEvening');
   };
 
@@ -89,25 +101,40 @@ export default function DashboardPage() {
 
   const handleCloseConfirm = () => {
     if (isProcessingAction) return;
+
     setSelectedBooking(null);
     setActionType(null);
   };
 
   const handleConfirmAction = async () => {
     if (!selectedBooking || !actionType) return;
+
     try {
       setIsProcessingAction(true);
+
       if (actionType === 'accept') {
         await bookingsGateway.acceptBooking(selectedBooking.id);
-        showToast(t('availableBookings.acceptedSuccess'), 'success');
+
+        showToast(
+          t('availableBookings.acceptedSuccess'),
+          'success'
+        );
       } else {
         await bookingsGateway.rejectBooking(selectedBooking.id);
-        showToast(t('availableBookings.rejectedSuccess'), 'info');
+
+        showToast(
+          t('availableBookings.rejectedSuccess'),
+          'info'
+        );
       }
+
       handleCloseConfirm();
       fetchDashboardData();
     } catch (err) {
-      showToast(err.message || 'Action failed', 'error');
+      showToast(
+        err.message || 'Action failed',
+        'error'
+      );
     } finally {
       setIsProcessingAction(false);
     }
@@ -115,21 +142,31 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-200">
-      
-      {/* Top Banner: Greeting & Quick Profile Summary */}
+
+      {/* Top Banner */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 sm:p-8 rounded-3xl shadow-lg shadow-blue-600/15">
+
         <div>
           <div className="flex items-center gap-2 mb-2">
+
             <span className="px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-white/20 backdrop-blur-xs rounded-full">
-              {worker?.primaryService ? t(`services.${worker.primaryService}`) || worker.primaryService : 'Service Pro'}
+              {worker?.primaryService
+                ? t(`services.${worker.primaryService}`) ||
+                  worker.primaryService
+                : 'Service Pro'}
             </span>
+
             <span className="flex items-center gap-1 text-[11px] font-medium text-blue-100">
-              <ShieldCheck className="w-3.5 h-3.5" /> {t('profile.verifiedWorker')}
+              <ShieldCheck className="w-3.5 h-3.5" />
+              {t('profile.verifiedWorker')}
             </span>
+
           </div>
+
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
             {getGreeting()}, {worker?.fullName || 'Worker'}!
           </h1>
+
           <p className="mt-1 text-sm text-blue-100 max-w-xl">
             {t('dashboard.subtitle')}
           </p>
@@ -146,10 +183,13 @@ export default function DashboardPage() {
             {t('nav.availableJobs')}
           </Button>
         </div>
+
       </div>
 
       {/* Summary Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+
+        {/* New Requests */}
         <StatCard
           title={t('dashboard.stats.newRequests')}
           value={stats.newRequests}
@@ -158,22 +198,32 @@ export default function DashboardPage() {
           color="blue"
           onClick={() => navigate('/available-jobs')}
         />
+
+        {/* Upcoming Jobs */}
         <StatCard
           title={t('dashboard.stats.upcomingJobs')}
           value={stats.upcomingJobs}
           subtitle={t('dashboard.stats.upcomingJobsSub')}
           icon={CalendarCheck}
           color="amber"
-          onClick={() => navigate('/my-bookings')}
+          onClick={() =>
+            navigate('/my-bookings?tab=upcoming')
+          }
         />
+
+        {/* Completed Jobs */}
         <StatCard
           title={t('dashboard.stats.completedJobs')}
           value={stats.completedJobs}
           subtitle={t('dashboard.stats.completedJobsSub')}
           icon={CheckCircle2}
           color="emerald"
-          onClick={() => navigate('/my-bookings')}
+          onClick={() =>
+            navigate('/my-bookings?tab=completed')
+          }
         />
+
+        {/* Total Earnings */}
         <StatCard
           title={t('dashboard.stats.totalEarnings')}
           value={`${t('common.currencySymbol')}${stats.totalEarnings}`}
@@ -182,15 +232,21 @@ export default function DashboardPage() {
           color="purple"
           onClick={() => navigate('/earnings')}
         />
+
       </div>
 
-      {/* Availability Notice Bar (if offline) */}
+      {/* Availability Notice */}
       {!isAvailable && (
         <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 flex items-center justify-between gap-4">
+
           <div className="flex items-center gap-3 text-amber-800 dark:text-amber-200 text-sm">
             <AlertCircle className="w-5 h-5 shrink-0 text-amber-600 dark:text-amber-400" />
-            <span>{t('dashboard.availabilityBannerInactive')}</span>
+
+            <span>
+              {t('dashboard.availabilityBannerInactive')}
+            </span>
           </div>
+
           <Button
             variant="primary"
             size="sm"
@@ -199,16 +255,20 @@ export default function DashboardPage() {
           >
             {t('dashboard.toggleAvailability')}
           </Button>
+
         </div>
       )}
 
-      {/* Available Booking Requests Section */}
+      {/* Available Booking Requests */}
       <div className="space-y-4">
+
         <div className="flex items-center justify-between">
+
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">
               {t('dashboard.availableRequestsTitle')}
             </h2>
+
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
               {t('dashboard.availableRequestsSubtitle')}
             </p>
@@ -218,14 +278,23 @@ export default function DashboardPage() {
             to="/available-jobs"
             className="text-xs sm:text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1 group"
           >
-            <span>{t('dashboard.viewAllJobs')}</span>
+            <span>
+              {t('dashboard.viewAllJobs')}
+            </span>
+
             <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
           </Link>
+
         </div>
 
         {isLoading ? (
-          <LoadingState message="Checking for nearby service requests..." />
+
+          <LoadingState
+            message="Checking for nearby service requests..."
+          />
+
         ) : availableRequests.length === 0 ? (
+
           <EmptyState
             title={t('dashboard.noRequestsTitle')}
             description={t('dashboard.noRequestsDesc')}
@@ -233,22 +302,36 @@ export default function DashboardPage() {
             actionText={t('availableBookings.title')}
             onAction={() => navigate('/available-jobs')}
           />
+
         ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {availableRequests.slice(0, 2).map((booking) => (
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+            {availableRequests.slice(0, 2).map((booking) => (
+
               <BookingCard
                 key={booking.id}
                 booking={booking}
-                onViewDetails={(id) => navigate(`/booking/${id}`)}
-                onAccept={(b) => handleOpenConfirm(b, 'accept')}
-                onReject={(b) => handleOpenConfirm(b, 'reject')}
+                onViewDetails={(id) =>
+                  navigate(`/booking/${id}`)
+                }
+                onAccept={(b) =>
+                  handleOpenConfirm(b, 'accept')
+                }
+                onReject={(b) =>
+                  handleOpenConfirm(b, 'reject')
+                }
               />
+
             ))}
+
           </div>
+
         )}
+
       </div>
 
-      {/* Confirmation Modal for Accept / Reject */}
+      {/* Confirmation Modal */}
       <ConfirmDialog
         isOpen={!!selectedBooking}
         onClose={handleCloseConfirm}
@@ -270,8 +353,13 @@ export default function DashboardPage() {
             : t('bookingDetails.confirmReject')
         }
         cancelText={t('common.cancel')}
-        type={actionType === 'accept' ? 'info' : 'danger'}
+        type={
+          actionType === 'accept'
+            ? 'info'
+            : 'danger'
+        }
       />
+
     </div>
   );
 }
